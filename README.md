@@ -1,17 +1,17 @@
 # Unified Rust-WASM Chrome Extension Starter
 
-Welcome to your clean Chrome Extension development environment! This entire repository serves as a **single flat Chrome Extension starter project** powered by the **Bun JavaScript runtime** and a **Rust + WebAssembly** core engine.
+Welcome to your Chrome Extension development workspace! This entire repository serves as a **single flat Chrome Extension starter project** powered by the **Bun JavaScript runtime** and a **Rust + WebAssembly** core engine. It integrates standard and advanced Chrome Extension APIs into a single project, using modern browser-native Web Components backed by Rust.
 
 ---
 
-## 1. Project Directory Structure
+## 1. Directory Structure
 
 ```text
 exba-browser-extention/   # The root directory is the unpacked extension itself!
-├── manifest.json         # Extension Manifest V3 configuration
+├── manifest.json         # Extension Manifest V3 configuration (CSP & permissions)
 ├── rules.json            # Declarative Net Request filtering rules
-├── styles.css            # Shared glassmorphic UI stylesheet
-├── framework.js          # Base WasmElement class mapping Custom Elements to Rust
+├── styles.css            # Shared glassmorphic UI stylesheet (Popup, Options, Sidepanel)
+├── framework.js          # Base WasmElement class mapping Custom Elements to Rust (with skeleton loaders)
 ├── build.sh              # Bash script to compile Rust core to WASM
 │
 ├── popup.html            # Default popup entry point
@@ -24,15 +24,15 @@ exba-browser-extention/   # The root directory is the unpacked extension itself!
 ├── offscreen.html / js   # Offscreen helper page for Clipboard copy tasks
 │
 ├── components/           # JavaScript Web Component wrappers
-│   ├── wasm-dashboard.js # Wraps `<wasm-dashboard>` (Popup dashboard UI)
-│   └── wasm-benchmark.js # Wraps `<wasm-benchmark>` (Options benchmark UI)
+│   ├── wasm-dashboard.js # Custom Element for <wasm-dashboard> (Fuzzy Search Grid)
+│   └── wasm-benchmark.js # Custom Element for <wasm-benchmark> (Options benchmark)
 │
 ├── wasm/                 # Rust Core Crate
-│   ├── Cargo.toml        # Rust dependencies (serde, serde_json, web-sys)
+│   ├── Cargo.toml        # Rust dependencies (wasm-bindgen-futures, js-sys, serde)
 │   └── src/
-│       └── lib.rs        # Core state, mutators, and layout render templates
+│       └── lib.rs        # Core state, mutators, fuzzy search, and HTML templates
 │
-├── architecture_suggestions.md # Architecture recommendations (monorepo & abstractions)
+├── TODOS.md              # Project roadmap, bundling, and upload tasks
 ├── package.json          # Workspace configuration & script tooling (Bun)
 ├── bun.lock              # Bun lockfile (dependencies)
 ├── eslint.config.js      # Shared ESLint configuration
@@ -41,9 +41,23 @@ exba-browser-extention/   # The root directory is the unpacked extension itself!
 
 ---
 
-## 2. Local Development Setup
+## 2. Integrated Features & Demos
 
-To build and run the extension locally, configure the prerequisites below.
+This boilerplate features a fully functional showcase of Chrome Extension capabilities:
+
+1. **Native Web Components (`WasmElement`)**: The popup and options UIs are native Web Components (Shadow DOM) that delegate state and layout templates to Rust.
+2. **Fuzzy Search Card Grid**: The popup renders a 2-column grid selector of extension features. Typing in the search input triggers a subsequence-matching fuzzy search in Rust that filters cards in real-time, utilizing partial DOM updates to preserve keyboard focus.
+3. **Asynchronous Rust Futures**: Exposes an async Rust function (`run_async_task`) that instantiates a JavaScript timer Promise and awaits it asynchronously inside Rust using `wasm-bindgen-futures`.
+4. **Chrome Storage Sync**: Popup and Options synchronize user settings (favorite color themes) using `chrome.storage.local`.
+5. **Background Alarms**: The service worker creates a recurring background timer that fires once per minute and pushes timestamps directly to the Side Panel.
+6. **Offscreen Document (Clipboard API)**: Creates a temporary offscreen document to write text to the user's system clipboard (bypassing service worker DOM limitations).
+7. **Declarative Net Request**: Blocks specific tracking domains (like `doubleclick.net`) and appends custom headers (`X-Extension-Header`) to HTTP requests going to `httpbin.org`.
+
+---
+
+## 3. Local Development Setup
+
+To build and run the extension locally:
 
 ### Prerequisites
 
@@ -74,7 +88,7 @@ bun run prettier  # Format markdown, html, and json files
 
 ---
 
-## 3. Developing and Testing Locally
+## 4. Developing and Testing Locally
 
 ### 1. Compile the WASM Core
 
@@ -95,17 +109,9 @@ This runs `wasm-pack build --target web` inside the `wasm` directory, generating
 4. Click **Load unpacked** in the top-left corner.
 5. Select the **root directory** of this repository (`exba-browser-extention`).
 
-### 3. Verify & Debug APIs
-
-- **Popup UI**: Click the extension icon. The popup uses the `<wasm-dashboard>` Web Component powered by Rust, maintaining a count value and an interactive task list.
-- **Side Panel**: Right-click the extension icon and select **Open side panel** (or click the icon if configured to open sidepanel directly). Type a string and click **Copy** to test clipboard writes via the Offscreen Document.
-- **Alarms**: Keep the sidepanel open. Once a minute, the background alarm fires and pushes the timestamp event directly to the sidepanel list.
-- **Network rules**: Click the links in the sidepanel. Notice that `doubleclick.net` blocks successfully, and requests to `https://httpbin.org/headers` include the custom header `X-Extension-Header: WasmUnifiedDemo`.
-- **Options Benchmark**: Right-click the extension icon and choose **Options**. Set your favorite colors, and click **Run Speed Test** to run 500,000 Fibonacci calculations comparing JS to Rust WASM execution speeds.
-
 ---
 
-## 4. Production Build & Publishing Process
+## 5. Production Build & Publishing Process
 
 When you are ready to publish your extension to the Chrome Web Store:
 
@@ -152,3 +158,9 @@ Google Chrome's Manifest V3 security model strictly regulates code execution:
 - **Reviewer Justification**: When submitting an extension containing WASM, the Chrome review team may subject it to a more rigorous, manual review to ensure the binary code is safe (since WASM can obfuscate functionality).
   - _Best Practice_: In the **Single Purpose and Permission Justification** section of your submission, note that the extension uses a local WebAssembly module compiled from Rust to perform safe client-side compute tasks (like cryptography, encryption, or math).
   - _Note_: Be prepared to provide access to the original Rust source code repository if the reviewer requests it to audit the compiled binary.
+
+---
+
+## 6. Next Steps & Todos
+
+For upcoming task lists, bundling scripts, options forms synchronization, and automated publishing integration, see [TODOS.md](file:///media/naranyala/Data/projects-remote/exba-browser-extention/TODOS.md).

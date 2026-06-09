@@ -1,8 +1,8 @@
 /* Shared stylesheet for Unified Extension UI (Popup, Options, Sidepanel) */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 
 :root {
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --bg-gradient: linear-gradient(135deg, #090d16 0%, #111625 100%);
   --card-bg: rgba(30, 41, 59, 0.65);
   --card-border: rgba(255, 255, 255, 0.08);
@@ -39,9 +39,9 @@ body {
 
 /* Page sizing constraints */
 body.popup-body {
-  width: 360px;
+  width: 440px;
   min-height: auto;
-  height: 520px;
+  height: 480px;
   padding: 12px;
 }
 

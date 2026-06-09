@@ -13,9 +13,25 @@ export class WasmElement extends HTMLElement {
     this.initWasmFn = initWasmFn;
     this.EngineClass = EngineClass;
     this.initialArgs = initialArgs;
-    
+
     this.engine = null;
-    this.state = {};
+    this._state = {}; // Internal raw state
+    this.state = this.createReactiveState({}); // Reactive Proxy
+  }
+
+  // Create a reactive Proxy for state
+  createReactiveState(initialState) {
+    const self = this;
+    return new Proxy(initialState, {
+      set(target, property, value) {
+        if (target[property] === value) return true;
+        target[property] = value;
+        // Auto-sync to Rust and re-render
+        self.syncStateToRust();
+        self.render();
+        return true;
+      },
+    });
   }
 
   // Lifecycle callback when component is attached to DOM
@@ -35,7 +51,9 @@ export class WasmElement extends HTMLElement {
 
   // Hook to provide arguments to the Rust constructor (can be overridden by subclasses)
   getEngineArgs() {
-    return this.initialArgs.length ? this.initialArgs : [this.getAttribute('title') || 'Wasm Component'];
+    return this.initialArgs.length
+      ? this.initialArgs
+      : [this.getAttribute('title') || 'Wasm Component'];
   }
 
   async init() {
@@ -66,7 +84,9 @@ export class WasmElement extends HTMLElement {
     if (!this.engine) return;
     const jsonStr = this.engine.get_state_json();
     try {
-      this.state = JSON.parse(jsonStr);
+      const newState = JSON.parse(jsonStr);
+      // Replace the proxy to update the state with new data from Rust
+      this.state = this.createReactiveState(newState);
     } catch (e) {
       console.error('[WasmElement] Error parsing Rust state JSON:', e);
     }
@@ -75,71 +95,77 @@ export class WasmElement extends HTMLElement {
   // Pushes the serialized state from JS back to Rust
   syncStateToRust() {
     if (!this.engine) return;
+    // We need to get the target object from the proxy to serialize it
+    // Or just serialize the proxy directly (JSON.stringify works on proxies)
     this.engine.set_state(JSON.stringify(this.state));
   }
 
-  // Renders HTML from the Rust Engine and binds events
+  // Renders HTML from the client. Must be overridden by subclasses.
   render() {
     if (!this.engine) {
-      this.shadowRoot.innerHTML = `
-        <div style="color: #94a3b8; font-family: sans-serif; font-size: 12px;">
-          Initializing WASM Core...
-        </div>
-      `;
+      this.renderSkeleton();
       return;
     }
-    
-    // Get HTML directly from the Rust render engine!
-    this.shadowRoot.innerHTML = this.engine.render();
+
+    // Default implementation: Subclasses should override this
+    // Or, if using the Rust engine for rendering, they can call this.engine.render()
+    this.shadowRoot.innerHTML = this.renderContent ? this.renderContent(this.state) : (this.engine.render ? this.engine.render() : '');
     this.bindEvents();
   }
 
+  renderSkeleton() {
+    this.shadowRoot.innerHTML = `
+        <style>
+          .skeleton-search {
+            height: 38px;
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            margin-bottom: 14px;
+            box-sizing: border-box;
+          }
+          .skeleton-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+          }
+          .skeleton-card {
+            background: rgba(30, 41, 59, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 10px;
+            height: 105px;
+            box-sizing: border-box;
+            animation: pulse 1.5s infinite alternate;
+          }
+          @keyframes pulse {
+            from { opacity: 0.6; }
+            to { opacity: 1; }
+          }
+        </style>
+        <div>
+          <div class="skeleton-search"></div>
+          <div class="skeleton-grid">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+          </div>
+        </div>
+      `;
+  }
+
   // Binds event listeners inside the Shadow DOM
+  // Subclasses can override this to add custom bindings
   bindEvents() {
     // 1. Declarative click bindings (elements with data-click="rust_method_name")
     const clickElements = this.shadowRoot.querySelectorAll('[data-click]');
-    clickElements.forEach(el => {
+    clickElements.forEach((el) => {
       const methodName = el.getAttribute('data-click');
       el.addEventListener('click', () => {
         if (this.engine && typeof this.engine[methodName] === 'function') {
           this.engine[methodName]();
           this.syncStateFromRust();
           this.render(); // Re-render on state change
-        }
-      });
-    });
-
-    // 2. Specific bindings for adding items in our demo form
-    const addBtn = this.shadowRoot.querySelector('#btn-add');
-    const inputEl = this.shadowRoot.querySelector('#item-input');
-    if (addBtn && inputEl) {
-      inputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          addBtn.click();
-        }
-      });
-
-      addBtn.addEventListener('click', () => {
-        const text = inputEl.value.trim();
-        if (text) {
-          this.engine.add_item(text);
-          inputEl.value = ''; // Reset input
-          this.syncStateFromRust();
-          this.render();
-        }
-      });
-    }
-
-    // 3. Specific bindings for delete item buttons (list item deletions)
-    const deleteBtns = this.shadowRoot.querySelectorAll('.delete-btn');
-    deleteBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.getAttribute('data-idx'), 10);
-        if (!isNaN(idx)) {
-          this.engine.delete_item(idx);
-          this.syncStateFromRust();
-          this.render();
         }
       });
     });

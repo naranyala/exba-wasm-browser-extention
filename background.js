@@ -11,7 +11,7 @@ chrome.runtime.onInstalled.addListener(() => {
     if (!result.favoriteColor) {
       chrome.storage.local.set({
         favoriteColor: '#60a5fa',
-        autoApply: false
+        autoApply: false,
       });
     }
   });
@@ -19,7 +19,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // 3. Create a background Alarm
   console.log('[Background] Initializing alarms...');
   chrome.alarms.create('unified-alarm', {
-    periodInMinutes: 1
+    periodInMinutes: 1,
   });
 });
 
@@ -30,12 +30,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     console.log('[Background] Alarm event triggered at:', timeString);
 
     // Dispatch messages to other extension pages (e.g. Sidepanel)
-    chrome.runtime.sendMessage({
-      action: 'alarm_fired',
-      time: timeString
-    }).catch(() => {
-      // Catch error if listeners aren't currently open
-    });
+    chrome.runtime
+      .sendMessage({
+        action: 'alarm_fired',
+        time: timeString,
+      })
+      .catch(() => {
+        // Catch error if listeners aren't currently open
+      });
   }
 });
 
@@ -53,25 +55,27 @@ async function handleClipboardWrite(text) {
   const OFFSCREEN_PATH = 'offscreen.html';
 
   const contexts = await chrome.runtime.getContexts({
-    contextTypes: ['OFFSCREEN_DOCUMENT']
+    contextTypes: ['OFFSCREEN_DOCUMENT'],
   });
 
   if (contexts.length === 0) {
     await chrome.offscreen.createDocument({
       url: OFFSCREEN_PATH,
       reasons: ['CLIPBOARD'],
-      justification: 'Copying generated text to the clipboard'
+      justification: 'Copying generated text to the clipboard',
     });
   }
 
   try {
     const response = await chrome.runtime.sendMessage({
       action: 'offscreen_copy',
-      text: text
+      text: text,
     });
-    
+
     if (!response || !response.success) {
-      throw new Error(response ? response.error : 'Unknown offscreen copy error');
+      throw new Error(
+        response ? response.error : 'Unknown offscreen copy error',
+      );
     }
   } finally {
     await chrome.offscreen.closeDocument();

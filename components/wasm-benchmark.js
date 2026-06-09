@@ -6,17 +6,29 @@ export class WasmBenchmark extends WasmElement {
     super(init, CoreEngine);
   }
 
-  // Override render to call our custom benchmark renderer in Rust
-  render() {
-    if (!this.engine) {
-      this.shadowRoot.innerHTML = `
-        <div style="color: #94a3b8; font-family: monospace; font-size: 12px; margin-top: 8px;">
-          Initializing Wasm Core...
-        </div>
-      `;
-      return;
-    }
-    this.shadowRoot.innerHTML = this.engine.render_benchmark();
+  renderContent(state) {
+    return `
+            <style>
+              .bench-box {
+                background: rgba(15, 23, 42, 0.4);
+                border: 1px dashed rgba(255, 255, 255, 0.08);
+                border-radius: 6px;
+                padding: 10px;
+                font-family: monospace;
+                font-size: 12px;
+                color: #10b981;
+                margin-top: 6px;
+              }
+              strong {
+                color: #38bdf8;
+              }
+            </style>
+            <div>
+              <div class="bench-box">
+                Last calculated: fib(<strong>${state.count}</strong>) = <strong>${state.fib_val}</strong>
+              </div>
+            </div>
+            `;
   }
 
   // Public method for JS to invoke calculations inside Rust

@@ -1,11 +1,14 @@
 // Unified Extension Content Script
-(function () {
+(() => {
   console.log('[Unified Extension] Content script active.');
 
   // Fetch configs
   chrome.storage.local.get(['favoriteColor', 'autoApply'], (result) => {
     if (result.autoApply && result.favoriteColor) {
-      console.log('[Unified Extension] Auto-applying color:', result.favoriteColor);
+      console.log(
+        '[Unified Extension] Auto-applying color:',
+        result.favoriteColor,
+      );
       applyColor(result.favoriteColor);
     }
   });

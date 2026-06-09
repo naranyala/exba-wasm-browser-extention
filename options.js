@@ -38,15 +38,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const color = defaultColorSelect.value;
     const apply = autoApplyCheckbox.checked;
 
-    chrome.storage.local.set({
-      favoriteColor: color,
-      autoApply: apply
-    }, () => {
-      statusMsg.textContent = 'Settings saved successfully!';
-      setTimeout(() => {
-        statusMsg.textContent = '';
-      }, 2000);
-    });
+    chrome.storage.local.set(
+      {
+        favoriteColor: color,
+        autoApply: apply,
+      },
+      () => {
+        statusMsg.textContent = 'Settings saved successfully!';
+        setTimeout(() => {
+          statusMsg.textContent = '';
+        }, 2000);
+      },
+    );
   });
 
   // 3. Wasm Load Status Update
@@ -69,9 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
     btnBenchmark.disabled = true;
     btnBenchmark.textContent = 'Running...';
     jsResult.textContent = 'Running JS benchmark...';
-    
+
     // Trigger placeholder update inside custom Web Component shadow DOM
-    const wasmResultBox = wasmBenchComponent.shadowRoot.querySelector('.bench-box');
+    const wasmResultBox =
+      wasmBenchComponent.shadowRoot.querySelector('.bench-box');
     if (wasmResultBox) {
       wasmResultBox.textContent = 'Running Wasm benchmark...';
       wasmResultBox.style.color = '#38bdf8';
@@ -107,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (ratio > 1) {
         comparison = `Rust WASM is ~${ratio.toFixed(1)}x faster than JS.`;
       } else {
-        comparison = `Rust WASM is comparable to JS (JS is ~${(1/ratio).toFixed(1)}x faster due to JIT optimizations).`;
+        comparison = `Rust WASM is comparable to JS (JS is ~${(1 / ratio).toFixed(1)}x faster due to JIT optimizations).`;
       }
 
       statusInfo.textContent = `Benchmark Complete. ${comparison}`;

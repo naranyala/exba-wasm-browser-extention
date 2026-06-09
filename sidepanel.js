@@ -11,21 +11,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const text = clipInput.value;
     if (!text) return;
 
-    chrome.runtime.sendMessage({
-      action: 'write_clipboard',
-      text: text
-    }, (response) => {
-      if (response && response.success) {
-        clipStatus.textContent = 'Copied to clipboard!';
-        clipStatus.style.color = '#10b981';
-      } else {
-        clipStatus.textContent = `Error: ${response ? response.error : 'unknown'}`;
-        clipStatus.style.color = '#ef4444';
-      }
-      setTimeout(() => {
-        clipStatus.textContent = '';
-      }, 2000);
-    });
+    chrome.runtime.sendMessage(
+      {
+        action: 'write_clipboard',
+        text: text,
+      },
+      (response) => {
+        if (response && response.success) {
+          clipStatus.textContent = 'Copied to clipboard!';
+          clipStatus.style.color = '#10b981';
+        } else {
+          clipStatus.textContent = `Error: ${response ? response.error : 'unknown'}`;
+          clipStatus.style.color = '#ef4444';
+        }
+        setTimeout(() => {
+          clipStatus.textContent = '';
+        }, 2000);
+      },
+    );
   });
 
   // 2. Alarm Events Listeners

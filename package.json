@@ -4,9 +4,9 @@
   "private": true,
   "description": "Official samples for Chrome Extensions and the Chrome Apps platform.",
   "scripts": {
-    "prettier": "bunx prettier **/*.{md,html,json} -w",
-    "lint": "eslint **/*.js",
-    "lint:fix": "bun run lint -- --fix",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
     "prepare": "husky install"
   },
   "repository": {
@@ -21,23 +21,21 @@
   },
   "homepage": "https://github.com/GoogleChrome/chrome-extensions-samples#readme",
   "devDependencies": {
-    "@eslint/js": "9.19.0",
+    "@biomejs/biome": "^2.4.16",
     "chrome-types": "0.1.335",
-    "eslint": "9.19.0",
-    "eslint-config-prettier": "9.1.0",
-    "eslint-plugin-jest": "28.11.0",
-    "eslint-plugin-prettier": "5.4.1",
-    "globals": "15.14.0",
     "husky": "9.1.6",
-    "lint-staged": "15.2.10",
-    "prettier": "3.3.3"
+    "lint-staged": "15.2.10"
   },
   "lint-staged": {
-    "**/*.js": [
-      "bunx eslint --fix"
-    ],
-    "**/*.{md,html,json}": [
-      "bunx prettier --write"
+    "**/*.{js,json}": [
+      "biome check --write --no-errors-on-unmatched"
     ]
+  },
+  "dependencies": {
+    "chrome-webstore-upload": "^6.0.0",
+    "webext-bridge": "^6.0.1",
+    "webext-detect-page": "^6.0.0",
+    "webext-options-sync": "^4.3.0",
+    "webextension-polyfill": "^0.12.0"
   }
 }
