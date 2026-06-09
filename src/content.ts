@@ -1,10 +1,12 @@
 // Unified Extension Content Script
+import { chromeAPI } from '../lib/chrome';
+
 (() => {
   console.log('[Unified Extension] Content script active.');
 
   // Fetch configs
-  chrome.storage.local.get(['favoriteColor', 'autoApply'], (result) => {
-    if (result.autoApply && result.favoriteColor) {
+  chromeAPI.storage.local.get<any>(['favoriteColor', 'autoApply']).then((result) => {
+    if (result.autoApply && typeof result.favoriteColor === 'string') {
       console.log(
         '[Unified Extension] Auto-applying color:',
         result.favoriteColor,
@@ -13,12 +15,14 @@
     }
   });
 
-  function applyColor(color) {
+  function applyColor(color: string) {
     if (document.body) {
       document.body.style.backgroundColor = color;
     } else {
       document.addEventListener('DOMContentLoaded', () => {
-        document.body.style.backgroundColor = color;
+        if (document.body) {
+          document.body.style.backgroundColor = color;
+        }
       });
     }
   }

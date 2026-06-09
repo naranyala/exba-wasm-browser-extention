@@ -1,12 +1,12 @@
-import { WasmElement } from '../framework.js';
-import init, { CoreEngine } from '../wasm/pkg/wasm_unified_core.js';
+import { WasmElement } from '../framework';
+import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
 
 export class WasmBenchmark extends WasmElement {
   constructor() {
-    super(init, CoreEngine);
+    super(init as any, CoreEngine as any);
   }
 
-  renderContent(state) {
+  renderContent(state: any) {
     return `
             <style>
               .bench-box {
@@ -32,7 +32,7 @@ export class WasmBenchmark extends WasmElement {
   }
 
   // Public method for JS to invoke calculations inside Rust
-  runBenchmark(n) {
+  runBenchmark(n: number): number {
     if (this.engine) {
       // Direct call into compiled Rust method
       this.engine.run_fibonacci(n);

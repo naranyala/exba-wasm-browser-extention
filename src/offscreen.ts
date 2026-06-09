@@ -7,12 +7,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
     } catch (err) {
       console.error('[Offscreen] Copy failed:', err);
-      sendResponse({ success: false, error: err.toString() });
+      sendResponse({ success: false, error: err instanceof Error ? err.message : String(err) });
     }
   }
+  return true;
 });
 
-function copyToClipboard(text) {
+function copyToClipboard(text: string) {
   const textArea = document.createElement('textarea');
   textArea.value = text;
 

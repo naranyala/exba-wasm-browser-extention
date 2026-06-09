@@ -46,3 +46,6 @@ _metadata/
 dist/
 *.zip
 *.crx
+
+# Third-party dependencies
+thirdparty/

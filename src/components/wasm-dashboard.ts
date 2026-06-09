@@ -1,10 +1,10 @@
-import { WasmElement } from '../framework.js';
-import init, { CoreEngine } from '../wasm/pkg/wasm_unified_core.js';
-import { chromeAPI } from '../lib/chrome.js';
+import { WasmElement } from '../framework';
+import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
+import { chromeAPI } from '../../lib/chrome';
 
 export class WasmDashboard extends WasmElement {
   constructor() {
-    super(init, CoreEngine);
+    super(init as any, CoreEngine as any);
   }
 
   static get observedAttributes() {
@@ -13,7 +13,7 @@ export class WasmDashboard extends WasmElement {
 
   // Bind custom events for search and cards
   bindEvents() {
-    const searchInput = this.shadowRoot.querySelector('#search-input');
+    const searchInput = this.shadowRoot?.querySelector('#search-input') as HTMLInputElement | null;
     if (searchInput) {
       searchInput.addEventListener('input', () => {
         // Reactive state update:
@@ -24,17 +24,18 @@ export class WasmDashboard extends WasmElement {
       });
     }
 
-    const cards = this.shadowRoot.querySelectorAll('.grid-card');
-    cards.forEach((card) => {
+    const cards = this.shadowRoot?.querySelectorAll('.grid-card');
+    cards?.forEach((card) => {
       card.addEventListener('click', () => {
         const action = card.id;
         if (action === 'btn-open-options' || action === 'btn-open-benchmarks') {
           chromeAPI.runtime.openOptionsPage();
         } else if (action === 'btn-open-sidepanel') {
-          if (chrome.sidePanel && chrome.sidePanel.open) {
+          if ((chrome.sidePanel as any)?.open) {
             chromeAPI.tabs
               .query({ active: true, currentWindow: true })
-              .then(([tab]) => {
+              .then((tabs) => {
+                const tab = tabs[0];
                 if (tab && tab.id) {
                   chromeAPI.sidePanel.open({ tabId: tab.id }).catch(() => {
                     alert('Please click the extension icon in your toolbar to view the Sidebar Monitor.');

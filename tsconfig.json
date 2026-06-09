@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "allowJs": true,
+    "types": ["chrome"],
+    "ignoreDeprecations": "5.0"
+  },
+  "include": ["src/**/*", "lib/**/*"],
+  "exclude": ["node_modules", "wasm"]
+}

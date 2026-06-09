@@ -22,9 +22,12 @@
   "homepage": "https://github.com/GoogleChrome/chrome-extensions-samples#readme",
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@types/chrome": "^0.1.43",
     "chrome-types": "0.1.335",
+    "esbuild": "^0.28.0",
     "husky": "9.1.6",
-    "lint-staged": "15.2.10"
+    "lint-staged": "15.2.10",
+    "typescript": "^6.0.3"
   },
   "lint-staged": {
     "**/*.{js,json}": [

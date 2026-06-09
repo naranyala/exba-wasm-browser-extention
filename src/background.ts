@@ -49,9 +49,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch((err) => sendResponse({ success: false, error: err.toString() }));
     return true; // Keep channel open
   }
+  return false;
 });
 
-async function handleClipboardWrite(text) {
+async function handleClipboardWrite(text: string) {
   const OFFSCREEN_PATH = 'offscreen.html';
 
   const contexts = await chrome.runtime.getContexts({
