@@ -14,5 +14,5 @@ cd "$(dirname "$0")/wasm"
 wasm-pack build --target web
 
 echo -e "${GREEN}=== Build Successful! ===${NC}"
-echo -e "${GREEN}WASM module successfully compiled to extension-starter/wasm/pkg/${NC}"
-echo -e "You can now load 'extension-starter' as an unpacked extension in Google Chrome."
+echo -e "${GREEN}WASM module successfully compiled to wasm/pkg/${NC}"
+echo -e "You can now load the root directory as an unpacked extension in Google Chrome."

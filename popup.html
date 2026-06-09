@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Unified Extension Panel</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="popup-body">
+    <div class="container">
+      <div>
+        <h1>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="color: #a5b4fc"
+          >
+            <polygon points="6 2 18 2 18 6 6 6 6 2" />
+            <rect width="14" height="14" x="5" y="6" rx="2" />
+            <path d="M9 16h6" />
+          </svg>
+          Unified Wasm Panel
+        </h1>
+        <div class="subtitle">Wasm Web Component & Storage demo</div>
+
+        <!-- Dashboard Web Component -->
+        <wasm-dashboard title="Extension Dashboard"></wasm-dashboard>
+      </div>
+
+      <div class="footer">
+        <a href="#" id="open-options">Options Settings</a>
+        <span>•</span>
+        <a href="https://rustwasm.github.io/" target="_blank">RustWASM</a>
+      </div>
+    </div>
+
+    <script type="module" src="./components/wasm-dashboard.js"></script>
+    <script type="module">
+      // Bind the options link in the popup footer
+      document.addEventListener('DOMContentLoaded', () => {
+        document
+          .getElementById('open-options')
+          .addEventListener('click', (e) => {
+            e.preventDefault();
+            if (chrome.runtime.openOptionsPage) {
+              chrome.runtime.openOptionsPage();
+            } else {
+              window.open(chrome.runtime.getURL('options.html'));
+            }
+          });
+      });
+    </script>
+  </body>
+</html>

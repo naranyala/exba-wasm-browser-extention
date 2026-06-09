@@ -5,7 +5,13 @@
     "action": { "type": "block" },
     "condition": {
       "urlFilter": "*//*.doubleclick.net/*",
-      "resourceTypes": ["sub_frame", "stylesheet", "script", "image", "xmlhttprequest"]
+      "resourceTypes": [
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "xmlhttprequest"
+      ]
     }
   },
   {
@@ -23,7 +29,11 @@
     "action": {
       "type": "modifyHeaders",
       "requestHeaders": [
-        { "header": "X-Extension-Header", "operation": "set", "value": "WasmUnifiedDemo" }
+        {
+          "header": "X-Extension-Header",
+          "operation": "set",
+          "value": "WasmUnifiedDemo"
+        }
       ]
     },
     "condition": {
