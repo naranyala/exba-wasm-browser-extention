@@ -1,0 +1,48 @@
+# System / OS Files
+*~
+*.DS_Store
+.DS_store
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+desktop.ini
+
+# Editors and IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# Node.js
+node_modules/
+.npm
+.bun/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment and Local Configs
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.secret
+
+# Rust / WebAssembly build outputs
+# Ignore Cargo target directories wherever they appear
+**/target/
+# wasm-pack generates build logs
+wasm-pack.log
+
+# Extension debug artifacts
+_debug/
+_metadata/
+dist/
+*.zip
+*.crx

@@ -1,0 +1,34 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*//*.doubleclick.net/*",
+      "resourceTypes": ["sub_frame", "stylesheet", "script", "image", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "ads-blocker-test",
+      "resourceTypes": ["main_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "X-Extension-Header", "operation": "set", "value": "WasmUnifiedDemo" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||httpbin.org/headers",
+      "resourceTypes": ["main_frame", "xmlhttprequest"]
+    }
+  }
+]
