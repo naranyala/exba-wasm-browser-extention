@@ -1,4 +1,5 @@
 import './components/wasm-benchmark';
+import { chromeAPI } from './lib/chrome';
 
 // Define the interface for the custom element for easier typing
 interface WasmBenchmark extends HTMLElement {

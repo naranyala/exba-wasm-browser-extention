@@ -43,7 +43,8 @@ export const chromeAPI = {
           }
         });
       }),
-    openOptionsPage: (): void => chrome.runtime.openOptionsPage(),
+    openOptionsPage: (): Promise<void> =>
+      new Promise((resolve) => chrome.runtime.openOptionsPage(resolve)),
     getURL: (path: string): string => chrome.runtime.getURL(path),
   },
 
@@ -63,8 +64,8 @@ export const chromeAPI = {
    * Chrome Alarms API wrappers
    */
   alarms: {
-    create: (name: string, details: any): Promise<boolean> =>
-        new Promise((resolve) => chrome.alarms.create(name, details, (wasCreated: any) => { resolve(wasCreated); })),
+    create: (name: string, details: any): Promise<void> =>
+        chrome.alarms.create(name, details) as unknown as Promise<void>,
     get: (name: string): Promise<chrome.alarms.Alarm | undefined> =>
         new Promise((resolve) => chrome.alarms.get(name, resolve)),
     clear: (name: string): Promise<boolean> =>
@@ -88,7 +89,7 @@ export const chromeAPI = {
     setOptions: (details: any): Promise<void> =>
         new Promise((resolve) => chrome.sidePanel.setOptions(details, resolve)),
     open: (options: any): Promise<void> =>
-        new Promise((resolve) => chrome.sidePanel.open(options, resolve)),
+        new Promise((resolve) => (chrome.sidePanel as any).open(options, resolve)),
   },
 
   /**
@@ -105,8 +106,9 @@ export const chromeAPI = {
    * Chrome ContextMenus API wrappers
    */
   contextMenus: {
-    create: (details: any): Promise<void> =>
-        new Promise((resolve) => chrome.contextMenus.create(details, resolve)),
+    create: (details: any): void => {
+        chrome.contextMenus.create(details);
+    },
     remove: (id: string | number): Promise<void> =>
         new Promise((resolve) => chrome.contextMenus.remove(id, resolve)),
   },

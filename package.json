@@ -1,12 +1,18 @@
 {
   "name": "chrome-extensions-samples",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
   "description": "Official samples for Chrome Extensions and the Chrome Apps platform.",
   "scripts": {
+    "build": "rsbuild build",
+    "dev": "rsbuild dev",
+    "browser": "./run-browser.sh",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
+    "test": "vitest run",
+    "test:wasm": "cd wasm && wasm-pack test --node",
     "prepare": "husky install"
   },
   "repository": {
@@ -22,12 +28,17 @@
   "homepage": "https://github.com/GoogleChrome/chrome-extensions-samples#readme",
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@rsbuild/core": "^2.0.11",
     "@types/chrome": "^0.1.43",
+    "@vitest/browser": "^4.1.8",
     "chrome-types": "0.1.335",
     "esbuild": "^0.28.0",
     "husky": "9.1.6",
+    "jsdom": "^29.1.1",
     "lint-staged": "15.2.10",
-    "typescript": "^6.0.3"
+    "rsbuild-plugin-web-extension": "^1.0.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   },
   "lint-staged": {
     "**/*.{js,json}": [
@@ -36,6 +47,7 @@
   },
   "dependencies": {
     "chrome-webstore-upload": "^6.0.0",
+    "goober": "^2.1.19",
     "webext-bridge": "^6.0.1",
     "webext-detect-page": "^6.0.0",
     "webext-options-sync": "^4.3.0",

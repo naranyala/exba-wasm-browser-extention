@@ -15,3 +15,9 @@ gloo-utils = { version = "0.1", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 web-sys = { version = "0.3.61", features = ["console"] }
+getrandom = { version = "0.2", features = ["js"] }
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

@@ -10,7 +10,8 @@
     "sidePanel",
     "offscreen",
     "alarms",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "contextMenus"
   ],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -18,8 +19,7 @@
     "type": "module"
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "WASM Unified Extension"
+    "default_title": "Toggle EXBA Panel"
   },
   "options_page": "options.html",
   "side_panel": {
@@ -34,6 +34,28 @@
       }
     ]
   },
+  "commands": {
+    "toggle-exba-panel": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "MacCtrl+Shift+Y"
+      },
+      "description": "Toggle the EXBA Panel"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html",
+        "*.js",
+        "*.css",
+        "*.wasm",
+        "wasm/pkg/*",
+        "static/wasm/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

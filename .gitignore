@@ -49,3 +49,6 @@ dist/
 
 # Third-party dependencies
 thirdparty/
+
+# Local browser profile for development
+.chrome-profile/

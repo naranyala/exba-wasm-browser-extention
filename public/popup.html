@@ -39,21 +39,6 @@
       </div>
     </div>
 
-    <script type="module" src="./components/wasm-dashboard.js"></script>
-    <script type="module">
-      // Bind the options link in the popup footer
-      document.addEventListener('DOMContentLoaded', () => {
-        document
-          .getElementById('open-options')
-          .addEventListener('click', (e) => {
-            e.preventDefault();
-            if (chrome.runtime.openOptionsPage) {
-              chrome.runtime.openOptionsPage();
-            } else {
-              window.open(chrome.runtime.getURL('options.html'));
-            }
-          });
-      });
-    </script>
+    <script type="module" src="popup.js"></script>
   </body>
 </html>
