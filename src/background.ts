@@ -2,9 +2,16 @@ import browser from './lib/browser';
 
 // Unified Extension Service Worker
 
+// 1. Configure Sidepanel Behavior so action clicks open the Side Panel directly.
+// We call this at the top level so it is set on every service worker startup.
+if ((browser as any).sidePanel && (browser as any).sidePanel.setPanelBehavior) {
+  (browser as any).sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e: any) => {
+    console.warn('SidePanel.setPanelBehavior failed on startup:', e);
+  });
+}
+
 browser.runtime.onInstalled.addListener(async () => {
-  // 1. Set Sidepanel Behavior to true so action clicks open the Side Panel directly
-  // Note: browser.sidePanel is Chrome-specific, but we use feature detection for cross-browser safety.
+  // Set Sidepanel Behavior to true so action clicks open the Side Panel directly
   if ((browser as any).sidePanel && (browser as any).sidePanel.setPanelBehavior) {
     try {
       await (browser as any).sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -60,6 +67,18 @@ browser.alarms.onAlarm.addListener((alarm) => {
 });
 
 // 5. Manage Offscreen Clipboard Operations & App Navigation
+const openSidePanels = new Set<number>();
+
+browser.runtime.onConnect.addListener((port) => {
+  if (port.name.startsWith('sidepanel-')) {
+    const windowId = Number.parseInt(port.name.split('-')[1]);
+    openSidePanels.add(windowId);
+    port.onDisconnect.addListener(() => {
+      openSidePanels.delete(windowId);
+    });
+  }
+});
+
 browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === 'write_clipboard') {
     return handleClipboardWrite(message.text)
@@ -72,7 +91,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
   }
   if (message.action === 'open_side_panel') {
     if (sender.tab && sender.tab.id) {
-      openSidePanel(sender.tab.id);
+      openSidePanel(sender.tab.id, sender.tab.windowId);
+      return Promise.resolve({ success: true });
+    }
+    return Promise.resolve({ success: false, error: 'No tab ID found' });
+  }
+  if (message.action === 'toggle_side_panel') {
+    if (sender.tab && sender.tab.id) {
+      toggleSidePanel(sender.tab);
       return Promise.resolve({ success: true });
     }
     return Promise.resolve({ success: false, error: 'No tab ID found' });
@@ -80,15 +106,35 @@ browser.runtime.onMessage.addListener((message, sender) => {
   return false;
 });
 
-async function openSidePanel(tabId: number) {
+function toggleSidePanel(tab: any) {
+  const tabId = tab.id;
+  const windowId = tab.windowId;
+  if (tabId === undefined || windowId === undefined) return;
+
+  if (openSidePanels.has(windowId)) {
+    browser.runtime.sendMessage({ action: 'close_side_panel', windowId }).catch(() => {});
+  } else {
+    openSidePanel(tabId, windowId);
+  }
+}
+
+function openSidePanel(tabId: number, windowId?: number) {
   if ((browser as any).sidePanel && (browser as any).sidePanel.open) {
-    await (browser as any).sidePanel.open({ tabId });
+    if (windowId !== undefined) {
+      (browser as any).sidePanel.open({ windowId }).catch((e: any) => {
+        console.error('Failed to open side panel by windowId:', e);
+      });
+    } else {
+      (browser as any).sidePanel.open({ tabId }).catch((e: any) => {
+        console.error('Failed to open side panel by tabId:', e);
+      });
+    }
   } else if ((browser as any).sidebarAction && (browser as any).sidebarAction.open) {
     // Firefox fallback
-    await (browser as any).sidebarAction.open();
+    (browser as any).sidebarAction.open().catch(() => {});
   } else {
     // Final fallback to injected sidebar
-    await browser.tabs.sendMessage(tabId, { action: 'toggle_sidebar' }).catch(() => {});
+    browser.tabs.sendMessage(tabId, { action: 'toggle_sidebar' }).catch(() => {});
   }
 }
 
@@ -142,22 +188,48 @@ browser.commands.onCommand.addListener(async (command) => {
   if (command === 'toggle-exba-panel') {
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
     const activeTab = tabs[0];
-    if (activeTab && activeTab.id) {
-      await openSidePanel(activeTab.id);
+    if (activeTab) {
+      toggleSidePanel(activeTab);
     }
   }
 });
 
 // 7. Listen for Browser Action Icon Click (Command Bar Button) to Toggle EXBA Panel
-browser.action.onClicked.addListener(async (tab) => {
-  if (tab.id) {
-    await openSidePanel(tab.id);
-  }
+browser.action.onClicked.addListener((tab) => {
+  toggleSidePanel(tab);
 });
 
 // 8. Listen for Context Menu Clicks to Toggle EXBA Panel
-browser.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === 'toggle-exba-panel' && tab && tab.id) {
-    await openSidePanel(tab.id);
+browser.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'toggle-exba-panel' && tab) {
+    toggleSidePanel(tab);
   }
 });
+
+// 9. Listen for Tab Activation (switching tabs) to display the side panel
+browser.tabs.onActivated.addListener(async (activeInfo) => {
+  try {
+    const tab = await browser.tabs.get(activeInfo.tabId);
+    if (tab.id && (browser as any).sidePanel && (browser as any).sidePanel.open) {
+      // Attempt to open the panel for the current window on tab switch
+      await (browser as any).sidePanel.open({ windowId: tab.windowId });
+    }
+  } catch (e) {
+    // Ignore user gesture errors
+  }
+});
+
+// 10. Listen for URL/Tab updates to display the side panel
+browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.active) {
+    try {
+      if ((browser as any).sidePanel && (browser as any).sidePanel.open) {
+        // Attempt to open the panel for the current window on tab update
+        await (browser as any).sidePanel.open({ windowId: tab.windowId });
+      }
+    } catch (e) {
+      // Ignore user gesture errors
+    }
+  }
+});
+

@@ -5,9 +5,9 @@
   "private": true,
   "description": "Official samples for Chrome Extensions and the Chrome Apps platform.",
   "scripts": {
-    "build": "rsbuild build",
-    "build:chrome": "BROWSER=chrome rsbuild build",
-    "build:firefox": "BROWSER=firefox rsbuild build",
+    "build": "rsbuild build && node validate-build.cjs",
+    "build:chrome": "BROWSER=chrome rsbuild build && BROWSER=chrome node validate-build.cjs",
+    "build:firefox": "BROWSER=firefox rsbuild build && BROWSER=firefox node validate-build.cjs",
     "dev": "rsbuild dev",
     "dev:chrome": "BROWSER=chrome rsbuild dev",
     "dev:firefox": "BROWSER=firefox rsbuild dev",

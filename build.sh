@@ -14,5 +14,8 @@ cd "$ROOT_DIR"
 echo -e "${BLUE}=== Building Extension with Rsbuild ===${NC}"
 npm run build
 
+echo -e "${BLUE}=== Validating Extension Build ===${NC}"
+node "$ROOT_DIR/validate-build.cjs"
+
 echo -e "${GREEN}=== Build Successful! ===${NC}"
 echo -e "${GREEN}You can now load the 'dist' directory as an unpacked extension in Google Chrome.${NC}"

@@ -76,12 +76,13 @@ export class ReadonlySignal<T> {
 export class Computed<T> extends Signal<T> {
   private fn: () => T;
   private dirty = true;
-  private effectRef: () => void;
+  private disposeEffect: (() => void) | null = null;
 
   constructor(fn: () => T) {
     super(undefined as any);
     this.fn = fn;
-    this.effectRef = effect(() => {
+    this.disposeEffect = effect(() => {
+      this.fn();
       this.dirty = true;
       this.notify();
     });

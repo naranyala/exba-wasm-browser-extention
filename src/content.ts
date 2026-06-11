@@ -270,7 +270,11 @@ import browser from './lib/browser';
     }
 
     // Toggle button triggers
-    commandBar.querySelector('#btn-toggle-dashboard')?.addEventListener('click', toggleSidebar);
+    commandBar.querySelector('#btn-toggle-dashboard')?.addEventListener('click', () => {
+      browser.runtime.sendMessage({ action: 'toggle_side_panel' }).catch(() => {
+        toggleSidebar();
+      });
+    });
     closeBtn.addEventListener('click', toggleSidebar);
 
     // Settings trigger (through messaging to background)

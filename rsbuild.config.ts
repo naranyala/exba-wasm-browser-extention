@@ -116,18 +116,18 @@ export default defineConfig({
     {
       name: 'patch-manifest',
       setup(api) {
-        api.onAfterBuild(() => {
+        const patch = () => {
           const dist = path.resolve(`dist/${targetBrowser}`);
           const manifestPath = path.join(dist, 'manifest.json');
           if (!fs.existsSync(manifestPath)) return;
           let manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
           manifest = patchManifestPaths(manifest);
-          manifest.action = manifest.action || {};
-          manifest.action.default_popup = 'popup.html';
           manifest.options_page = 'options.html';
           fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
           console.log('Manifest patched');
-        });
+        };
+        api.onAfterBuild(patch);
+        api.onDevCompileDone(patch);
       },
     },
   ],

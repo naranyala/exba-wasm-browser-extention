@@ -1,9 +1,10 @@
 import browser from '../lib/browser';
 import { ExbaElement, defineExba } from '../lib/framework';
+import { signal } from '../lib/reactivity';
 import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
 
 export class WasmDashboard extends ExbaElement {
-  private _selectedIndex = this.computed(() => 0);
+  private _selectedIndex = signal(0);
   private _showSecurityTools = false;
 
   constructor() {
