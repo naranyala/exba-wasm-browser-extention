@@ -1,5 +1,6 @@
+import browser from './lib/browser';
+
 // Unified Extension Content Script
-import { chromeAPI } from './lib/chrome';
 
 (() => {
   console.log('[Unified Extension] Content script active.');
@@ -17,7 +18,7 @@ import { chromeAPI } from './lib/chrome';
 
   function initColorApplier() {
     // Fetch configs
-    chromeAPI.storage.local.get<any>(['favoriteColor', 'autoApply']).then((result) => {
+    browser.storage.local.get(['favoriteColor', 'autoApply']).then((result) => {
       if (result.autoApply && typeof result.favoriteColor === 'string') {
         console.log(
           '[Unified Extension] Auto-applying color:',
@@ -219,7 +220,7 @@ import { chromeAPI } from './lib/chrome';
 
     // Create elements
     const commandBar = document.createElement('div');
-    commandBar.className = 'exba-command-bar';
+    commandBar.className = 'exba-command-bar hidden';
     commandBar.innerHTML = `
       <div class="brand">EXBA</div>
       <div class="divider"></div>
@@ -238,7 +239,7 @@ import { chromeAPI } from './lib/chrome';
     `;
 
     const pinnedBadge = document.createElement('div');
-    pinnedBadge.className = 'exba-pinned-badge hidden';
+    pinnedBadge.className = 'exba-pinned-badge';
     pinnedBadge.textContent = 'EXBA';
 
     const panel = document.createElement('div');
@@ -249,7 +250,7 @@ import { chromeAPI } from './lib/chrome';
     closeBtn.innerHTML = `&times;`;
 
     const iframe = document.createElement('iframe');
-    iframe.src = chrome.runtime.getURL('popup.html?embed=true');
+    iframe.src = browser.runtime.getURL('popup.html?embed=true');
 
     panel.appendChild(closeBtn);
     panel.appendChild(iframe);
@@ -261,6 +262,9 @@ import { chromeAPI } from './lib/chrome';
 
     document.body.appendChild(host);
 
+    // Try to open the sidepanel automatically on first load (might be blocked without gesture)
+    browser.runtime.sendMessage({ action: 'open_side_panel' }).catch(() => {});
+
     function toggleSidebar() {
       panel.classList.toggle('open');
     }
@@ -271,7 +275,7 @@ import { chromeAPI } from './lib/chrome';
 
     // Settings trigger (through messaging to background)
     commandBar.querySelector('#btn-open-settings')?.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ action: 'open_options' });
+      browser.runtime.sendMessage({ action: 'open_options' });
     });
 
     // Minimize / Restore triggers
@@ -283,17 +287,21 @@ import { chromeAPI } from './lib/chrome';
     pinnedBadge.addEventListener('click', () => {
       pinnedBadge.classList.add('hidden');
       commandBar.classList.remove('hidden');
-      if (!panel.classList.contains('open')) {
-        toggleSidebar();
-      }
+      
+      // Try to open the native side panel
+      browser.runtime.sendMessage({ action: 'open_side_panel' }).catch(() => {
+        // Fallback to injected sidebar if side panel fails or message isn't handled
+        if (!panel.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
     });
 
     // Listen for events from background worker
-    chrome.runtime.onMessage.addListener((message) => {
+    browser.runtime.onMessage.addListener((message) => {
       if (message.action === 'toggle_sidebar') {
         toggleSidebar();
       }
     });
   }
 })();
-

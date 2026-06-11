@@ -6,7 +6,11 @@
   "description": "Official samples for Chrome Extensions and the Chrome Apps platform.",
   "scripts": {
     "build": "rsbuild build",
+    "build:chrome": "BROWSER=chrome rsbuild build",
+    "build:firefox": "BROWSER=firefox rsbuild build",
     "dev": "rsbuild dev",
+    "dev:chrome": "BROWSER=chrome rsbuild dev",
+    "dev:firefox": "BROWSER=firefox rsbuild dev",
     "browser": "./run-browser.sh",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -30,6 +34,7 @@
     "@biomejs/biome": "^2.4.16",
     "@rsbuild/core": "^2.0.11",
     "@types/chrome": "^0.1.43",
+    "@types/webextension-polyfill": "^0.12.5",
     "@vitest/browser": "^4.1.8",
     "chrome-types": "0.1.335",
     "esbuild": "^0.28.0",
@@ -46,8 +51,11 @@
     ]
   },
   "dependencies": {
+    "@tabler/icons": "^3.44.0",
     "chrome-webstore-upload": "^6.0.0",
     "goober": "^2.1.19",
+    "iconoir": "^7.11.0",
+    "lucide-static": "^1.17.0",
     "webext-bridge": "^6.0.1",
     "webext-detect-page": "^6.0.0",
     "webext-options-sync": "^4.3.0",

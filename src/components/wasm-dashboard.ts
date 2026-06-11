@@ -1,6 +1,6 @@
+import browser from '../lib/browser';
 import { ExbaElement, defineExba } from '../lib/framework';
 import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
-import { chromeAPI } from '../lib/chrome';
 
 export class WasmDashboard extends ExbaElement {
   private _selectedIndex = this.computed(() => 0);
@@ -270,7 +270,7 @@ export class WasmDashboard extends ExbaElement {
 
   private triggerAction(action: string) {
     if (action === 'btn-open-options' || action === 'btn-open-benchmarks') {
-      chromeAPI.runtime.openOptionsPage();
+      browser.runtime.openOptionsPage();
     } else if (action === 'btn-open-security') {
       this._showSecurityTools = !this._showSecurityTools;
       const securityTools = this.shadowRoot?.querySelector('#security-tools') as HTMLElement;
@@ -286,14 +286,16 @@ export class WasmDashboard extends ExbaElement {
   }
 
   private async openSidePanel() {
-    if ((chrome.sidePanel as any)?.open) {
-      const tabs = await chromeAPI.tabs.query({ active: true, currentWindow: true });
+    if ((browser as any).sidePanel && (browser as any).sidePanel.open) {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const tab = tabs[0];
       if (tab && tab.id) {
-        chromeAPI.sidePanel.open({ tabId: tab.id }).catch(() => {
+        await (browser as any).sidePanel.open({ tabId: tab.id }).catch(() => {
           alert('Please click the extension icon in your toolbar to view the Sidebar Monitor.');
         });
       }
+    } else if ((browser as any).sidebarAction && (browser as any).sidebarAction.open) {
+       await (browser as any).sidebarAction.open();
     } else {
       alert('Click the extension icon in your Chrome toolbar to open the Sidebar Monitor.');
     }

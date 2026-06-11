@@ -1,3 +1,4 @@
+import browser from './lib/browser';
 import './components/wasm-dashboard';
 
 // Apply embedded layout styles if requested in the URL
@@ -10,10 +11,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const openOptionsBtn = document.getElementById('open-options');
   openOptionsBtn?.addEventListener('click', (e) => {
     e.preventDefault();
-    if (chrome.runtime.openOptionsPage) {
-      chrome.runtime.openOptionsPage();
+    if (browser.runtime.openOptionsPage) {
+      browser.runtime.openOptionsPage();
     } else {
-      window.open(chrome.runtime.getURL('options.html'));
+      window.open(browser.runtime.getURL('options.html'));
     }
   });
 });

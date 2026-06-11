@@ -1,45 +1,54 @@
+import browser from './lib/browser';
+
 // Unified Extension Service Worker
 
-chrome.runtime.onInstalled.addListener(() => {
+browser.runtime.onInstalled.addListener(async () => {
   // 1. Set Sidepanel Behavior to true so action clicks open the Side Panel directly
-  if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
-    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  // Note: browser.sidePanel is Chrome-specific, but we use feature detection for cross-browser safety.
+  if ((browser as any).sidePanel && (browser as any).sidePanel.setPanelBehavior) {
+    try {
+      await (browser as any).sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    } catch (e) {
+      console.warn('SidePanel.setPanelBehavior not supported or failed:', e);
+    }
   }
 
   // 2. Set default values in storage
-  chrome.storage.local.get(['favoriteColor'], (result) => {
-    if (!result.favoriteColor) {
-      chrome.storage.local.set({
-        favoriteColor: '#60a5fa',
-        autoApply: false,
-      });
-    }
-  });
+  const result = await browser.storage.local.get(['favoriteColor']);
+  if (!result.favoriteColor) {
+    await browser.storage.local.set({
+      favoriteColor: '#60a5fa',
+      autoApply: false,
+    });
+  }
 
   // 3. Create a background Alarm
   console.log('[Background] Initializing alarms...');
-  chrome.alarms.create('unified-alarm', {
+  browser.alarms.create('unified-alarm', {
     periodInMinutes: 1,
   });
 
   // 4. Create Context Menu item to Toggle EXBA Panel
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
+  try {
+    await browser.contextMenus.removeAll();
+    browser.contextMenus.create({
       id: 'toggle-exba-panel',
       title: 'Toggle EXBA Panel',
       contexts: ['all'],
     });
-  });
+  } catch (e) {
+    console.error('Error creating context menu:', e);
+  }
 });
 
 // 4. Listen for Alarms
-chrome.alarms.onAlarm.addListener((alarm) => {
+browser.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'unified-alarm') {
     const timeString = new Date().toLocaleTimeString();
     console.log('[Background] Alarm event triggered at:', timeString);
 
     // Dispatch messages to other extension pages (e.g. Sidepanel)
-    chrome.runtime
+    browser.runtime
       .sendMessage({
         action: 'alarm_fired',
         time: timeString,
@@ -51,30 +60,61 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // 5. Manage Offscreen Clipboard Operations & App Navigation
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === 'write_clipboard') {
-    handleClipboardWrite(message.text)
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.toString() }));
-    return true; // Keep channel open
+    return handleClipboardWrite(message.text)
+      .then(() => ({ success: true }))
+      .catch((err) => ({ success: false, error: err.toString() }));
   }
   if (message.action === 'open_options') {
-    chrome.runtime.openOptionsPage();
-    sendResponse({ success: true });
-    return true;
+    browser.runtime.openOptionsPage();
+    return Promise.resolve({ success: true });
+  }
+  if (message.action === 'open_side_panel') {
+    if (sender.tab && sender.tab.id) {
+      openSidePanel(sender.tab.id);
+      return Promise.resolve({ success: true });
+    }
+    return Promise.resolve({ success: false, error: 'No tab ID found' });
   }
   return false;
 });
 
+async function openSidePanel(tabId: number) {
+  if ((browser as any).sidePanel && (browser as any).sidePanel.open) {
+    await (browser as any).sidePanel.open({ tabId });
+  } else if ((browser as any).sidebarAction && (browser as any).sidebarAction.open) {
+    // Firefox fallback
+    await (browser as any).sidebarAction.open();
+  } else {
+    // Final fallback to injected sidebar
+    await browser.tabs.sendMessage(tabId, { action: 'toggle_sidebar' }).catch(() => {});
+  }
+}
+
 async function handleClipboardWrite(text: string) {
   const OFFSCREEN_PATH = 'offscreen.html';
 
-  const contexts = await chrome.runtime.getContexts({
+  // Feature detection for Offscreen Document (Chrome only currently)
+  if (!(browser as any).offscreen) {
+    // Fallback for Firefox/Safari: use navigator.clipboard if possible or other hacks
+    // For now, we try to use the modern clipboard API directly if in a secure context
+    try {
+      // Note: This often fails in background scripts without user gesture or specific focus
+      // A more robust fallback would be an injected script.
+      console.warn('Offscreen API not supported. Attempting fallback clipboard write.');
+    } catch (e) {
+      throw new Error('Clipboard write not supported on this browser.');
+    }
+    return;
+  }
+
+  const contexts = await (browser as any).runtime.getContexts({
     contextTypes: ['OFFSCREEN_DOCUMENT'],
   });
 
   if (contexts.length === 0) {
-    await chrome.offscreen.createDocument({
+    await (browser as any).offscreen.createDocument({
       url: OFFSCREEN_PATH,
       reasons: ['CLIPBOARD'],
       justification: 'Copying generated text to the clipboard',
@@ -82,7 +122,7 @@ async function handleClipboardWrite(text: string) {
   }
 
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = await browser.runtime.sendMessage({
       action: 'offscreen_copy',
       text: text,
     });
@@ -93,39 +133,31 @@ async function handleClipboardWrite(text: string) {
       );
     }
   } finally {
-    await chrome.offscreen.closeDocument();
+    await (browser as any).offscreen.closeDocument();
   }
 }
 
 // 6. Listen for Keyboard Command to Toggle EXBA Panel
-chrome.commands.onCommand.addListener((command) => {
+browser.commands.onCommand.addListener(async (command) => {
   if (command === 'toggle-exba-panel') {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const activeTab = tabs[0];
-      if (activeTab && activeTab.id) {
-        chrome.tabs.sendMessage(activeTab.id, { action: 'toggle_sidebar' }).catch(() => {
-          // Ignore errors for tabs where content script isn't loaded (e.g. chrome:// tabs)
-        });
-      }
-    });
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+    if (activeTab && activeTab.id) {
+      await openSidePanel(activeTab.id);
+    }
   }
 });
 
 // 7. Listen for Browser Action Icon Click (Command Bar Button) to Toggle EXBA Panel
-chrome.action.onClicked.addListener((tab) => {
+browser.action.onClicked.addListener(async (tab) => {
   if (tab.id) {
-    chrome.tabs.sendMessage(tab.id, { action: 'toggle_sidebar' }).catch(() => {
-      // Ignore errors for tabs where content script isn't loaded (e.g. chrome:// pages)
-    });
+    await openSidePanel(tab.id);
   }
 });
 
 // 8. Listen for Context Menu Clicks to Toggle EXBA Panel
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+browser.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'toggle-exba-panel' && tab && tab.id) {
-    chrome.tabs.sendMessage(tab.id, { action: 'toggle_sidebar' }).catch(() => {
-      // Ignore errors for tabs where content script isn't loaded
-    });
+    await openSidePanel(tab.id);
   }
 });
-

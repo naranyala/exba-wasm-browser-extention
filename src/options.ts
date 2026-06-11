@@ -1,5 +1,5 @@
+import browser from './lib/browser';
 import './components/wasm-benchmark';
-import { chromeAPI } from './lib/chrome';
 
 // Define the interface for the custom element for easier typing
 interface WasmBenchmark extends HTMLElement {
@@ -32,8 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const nInput = document.getElementById('benchmark-n') as HTMLInputElement | null;
   const statusInfo = document.getElementById('status-info') as HTMLParagraphElement | null;
 
-  // 1. Load Configurations from Chrome Storage
-  chromeAPI.storage.local.get<any>(['favoriteColor', 'autoApply']).then((result) => {
+  // 1. Load Configurations from Storage
+  browser.storage.local.get(['favoriteColor', 'autoApply']).then((result: any) => {
     if (typeof result.favoriteColor === 'string' && defaultColorSelect) {
       defaultColorSelect.value = result.favoriteColor;
     }
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const color = defaultColorSelect?.value || '';
     const apply = autoApplyCheckbox?.checked || false;
 
-    await chromeAPI.storage.local.set({
+    await browser.storage.local.set({
       favoriteColor: color,
       autoApply: apply,
     });
@@ -61,7 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 3. Wasm Load Status Update
-  // Once the custom element is defined, we can listen or assume it's ready since it handles its own connectedCallback
   setTimeout(() => {
     if (wasmBenchComponent && wasmBenchComponent.shadowRoot) {
       if (statusInfo) {

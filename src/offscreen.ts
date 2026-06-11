@@ -1,33 +1,19 @@
-// Offscreen Document script running DOM-level tasks
+import browser from './lib/browser';
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((message) => {
   if (message.action === 'offscreen_copy') {
+    const textArea = document.createElement('textarea');
+    textArea.value = message.text;
+    document.body.appendChild(textArea);
+    textArea.select();
     try {
-      copyToClipboard(message.text);
-      sendResponse({ success: true });
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return Promise.resolve({ success: true });
     } catch (err) {
-      console.error('[Offscreen] Copy failed:', err);
-      sendResponse({ success: false, error: err instanceof Error ? err.message : String(err) });
+      document.body.removeChild(textArea);
+      return Promise.resolve({ success: false, error: (err as any).toString() });
     }
   }
-  return true;
+  return false;
 });
-
-function copyToClipboard(text: string) {
-  const textArea = document.createElement('textarea');
-  textArea.value = text;
-
-  // Hide element
-  textArea.style.position = 'absolute';
-  textArea.style.left = '-9999px';
-  document.body.appendChild(textArea);
-
-  textArea.select();
-  const success = document.execCommand('copy');
-
-  document.body.removeChild(textArea);
-
-  if (!success) {
-    throw new Error('document.execCommand(copy) failed');
-  }
-}

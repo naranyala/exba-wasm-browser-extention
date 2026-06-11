@@ -3,13 +3,14 @@ set -e
 
 # Get absolute path of this script's directory
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DIST_DIR="$ROOT_DIR/dist"
+TARGET_BROWSER="${BROWSER:-chrome}"
+DIST_DIR="$ROOT_DIR/dist/$TARGET_BROWSER"
 PROFILE_DIR="$ROOT_DIR/.chrome-profile"
 
 # Ensure dist exists (build it if it doesn't)
 if [ ! -d "$DIST_DIR" ]; then
   echo -e "\033[0;34m=== Building extension first... ===\033[0m"
-  "$ROOT_DIR/build.sh"
+  npm run "build:$TARGET_BROWSER"
 fi
 
 # Detect available browsers

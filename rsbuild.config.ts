@@ -1,39 +1,161 @@
 import { defineConfig } from '@rsbuild/core';
+import { pluginWebExtension } from 'rsbuild-plugin-web-extension';
+import fs from 'fs';
+import path from 'path';
+
+const targetBrowser = process.env.BROWSER || 'chrome';
+
+function patchManifestPaths(manifest: any) {
+  const fixPath = (p: string) => p?.replace(/^\.\/src\//, '').replace(/\.ts$/, '.js');
+
+  if (manifest.background?.service_worker) {
+    manifest.background.service_worker = fixPath(manifest.background.service_worker);
+  }
+  if (manifest.side_panel?.default_path) {
+    manifest.side_panel.default_path = fixPath(manifest.side_panel.default_path);
+  }
+  if (manifest.content_scripts) {
+    for (const cs of manifest.content_scripts) {
+      if (cs.js) {
+        cs.js = cs.js.map(fixPath);
+      }
+    }
+  }
+  if (manifest.web_accessible_resources) {
+    for (const war of manifest.web_accessible_resources) {
+      if (war.resources) {
+        war.resources = war.resources.map((r: string) => r.replace(/^\.\/src\//, ''));
+      }
+    }
+  }
+  return manifest;
+}
 
 export default defineConfig({
   dev: {
     writeToDisk: true,
   },
+  plugins: [
+    pluginWebExtension({
+      manifest: {
+        manifest_version: 3,
+        name: 'Unified Rust-WASM Extension Starter',
+        version: '1.0.0',
+        description: 'A unified Manifest V3 extension boilerplate demonstrating Web Components, Rust-WASM, Sidepanels, Alarms, Offscreen DOM, and DNR network filtering.',
+        permissions: [
+          'storage',
+          'activeTab',
+          'scripting',
+          'sidePanel',
+          'offscreen',
+          'alarms',
+          'declarativeNetRequest',
+          'contextMenus',
+        ],
+        host_permissions: ['<all_urls>'],
+        background: {
+          service_worker: './src/background.ts',
+          type: 'module',
+        },
+        action: {
+          default_title: 'Toggle EXBA Panel',
+        },
+        side_panel: {
+          default_path: 'sidepanel.html',
+        },
+        declarative_net_request: {
+          rule_resources: [
+            {
+              id: 'ruleset_1',
+              enabled: true,
+              path: 'rules.json',
+            },
+          ],
+        },
+        commands: {
+          'toggle-exba-panel': {
+            suggested_key: {
+              default: 'Ctrl+Shift+Y',
+              mac: 'MacCtrl+Shift+Y',
+            },
+            description: 'Toggle the EXBA Panel',
+          },
+        },
+        web_accessible_resources: [
+          {
+            resources: [
+              'popup.html',
+              '*.js',
+              '*.css',
+              '*.wasm',
+              'wasm/pkg/*',
+              'static/wasm/*',
+            ],
+            matches: ['<all_urls>'],
+          },
+        ],
+        content_scripts: [
+          {
+            matches: ['<all_urls>'],
+            js: ['./src/content.ts'],
+          },
+        ],
+        content_security_policy: {
+          extension_pages: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'",
+        },
+        ...(targetBrowser === 'firefox' && {
+          browser_specific_settings: {
+            gecko: {
+              id: 'exba-wasm-extension@starter.com',
+              strict_min_version: '109.0',
+            },
+          },
+        }),
+      },
+    }),
+    {
+      name: 'patch-manifest',
+      setup(api) {
+        api.onAfterBuild(() => {
+          const dist = path.resolve(`dist/${targetBrowser}`);
+          const manifestPath = path.join(dist, 'manifest.json');
+          if (!fs.existsSync(manifestPath)) return;
+          let manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+          manifest = patchManifestPaths(manifest);
+          manifest.action = manifest.action || {};
+          manifest.action.default_popup = 'popup.html';
+          manifest.options_page = 'options.html';
+          fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+          console.log('Manifest patched');
+        });
+      },
+    },
+  ],
   source: {
+    define: {
+      'chrome.runtime.id': JSON.stringify('build-mock'),
+    },
     entry: {
-      background: './src/background.ts',
-      content: './src/content.ts',
-      offscreen: './src/offscreen.ts',
+      popup: './src/popup.ts',
       options: './src/options.ts',
       sidepanel: './src/sidepanel.ts',
-      popup: './src/popup.ts',
-    },
-  },
-  html: {
-    template: ({ entryName }) => {
-      const templates: Record<string, string> = {
-        options: './public/options.html',
-        sidepanel: './public/sidepanel.html',
-        offscreen: './public/offscreen.html',
-      };
-      return templates[entryName] || './public/popup.html';
+      offscreen: './src/offscreen.ts',
+      content: './src/content.ts',
     },
   },
   output: {
     distPath: {
-      root: 'dist',
+      root: `dist/${targetBrowser}`,
     },
     filenameHash: false,
     copy: [
       { from: './wasm/pkg', to: 'wasm/pkg' },
-      { from: './public/manifest.json', to: 'manifest.json' },
       { from: './public/styles.css', to: 'styles.css' },
       { from: './public/rules.json', to: 'rules.json' },
+      { from: './public/popup.html', to: 'popup.html' },
+      { from: './public/options.html', to: 'options.html' },
+      { from: './public/sidepanel.html', to: 'sidepanel.html' },
+      { from: './public/offscreen.html', to: 'offscreen.html' },
     ],
   },
   tools: {
