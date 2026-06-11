@@ -9,10 +9,12 @@ import browser from './lib/browser';
   if (document.body) {
     initColorApplier();
     initSidebar();
+    initAutoOpenOnStartup();
   } else {
     document.addEventListener('DOMContentLoaded', () => {
       initColorApplier();
       initSidebar();
+      initAutoOpenOnStartup();
     });
   }
 
@@ -262,50 +264,98 @@ import browser from './lib/browser';
 
     document.body.appendChild(host);
 
-    // Try to open the sidepanel automatically on first load (might be blocked without gesture)
-    browser.runtime.sendMessage({ action: 'open_side_panel' }).catch(() => {});
-
-    function toggleSidebar() {
-      panel.classList.toggle('open');
+    function setSidebarVisibility(isOpen: boolean) {
+      if (isOpen) {
+        panel.classList.add('open');
+        pinnedBadge.classList.add('hidden');
+        commandBar.classList.remove('hidden');
+      } else {
+        panel.classList.remove('open');
+        pinnedBadge.classList.remove('hidden');
+        commandBar.classList.add('hidden');
+      }
     }
 
-    // Toggle button triggers
-    commandBar.querySelector('#btn-toggle-dashboard')?.addEventListener('click', () => {
-      browser.runtime.sendMessage({ action: 'toggle_side_panel' }).catch(() => {
-        toggleSidebar();
-      });
+    // Load initial state
+    browser.storage.local.get(['isSidebarOpen']).then((result) => {
+      setSidebarVisibility(!!result.isSidebarOpen);
     });
-    closeBtn.addEventListener('click', toggleSidebar);
+
+    // Listen for storage changes to sync state across all tabs instantly
+    browser.storage.onChanged.addListener((changes) => {
+      if (changes.isSidebarOpen) {
+        setSidebarVisibility(!!changes.isSidebarOpen.newValue);
+      }
+    });
+
+    // Toggle button triggers
+    commandBar
+      .querySelector('#btn-toggle-dashboard')
+      ?.addEventListener('click', () => {
+        browser.storage.local.get(['isSidebarOpen']).then((result) => {
+          browser.storage.local.set({ isSidebarOpen: !result.isSidebarOpen });
+        });
+      });
+
+    closeBtn.addEventListener('click', () => {
+      browser.storage.local.set({ isSidebarOpen: false });
+    });
 
     // Settings trigger (through messaging to background)
-    commandBar.querySelector('#btn-open-settings')?.addEventListener('click', () => {
-      browser.runtime.sendMessage({ action: 'open_options' });
-    });
+    commandBar
+      .querySelector('#btn-open-settings')
+      ?.addEventListener('click', () => {
+        browser.runtime.sendMessage({ action: 'open_options' });
+      });
 
     // Minimize / Restore triggers
-    commandBar.querySelector('#btn-minimize-bar')?.addEventListener('click', () => {
-      commandBar.classList.add('hidden');
-      pinnedBadge.classList.remove('hidden');
-    });
+    commandBar
+      .querySelector('#btn-minimize-bar')
+      ?.addEventListener('click', () => {
+        browser.storage.local.set({ isSidebarOpen: false });
+      });
 
     pinnedBadge.addEventListener('click', () => {
-      pinnedBadge.classList.add('hidden');
-      commandBar.classList.remove('hidden');
-      
-      // Try to open the native side panel
-      browser.runtime.sendMessage({ action: 'open_side_panel' }).catch(() => {
-        // Fallback to injected sidebar if side panel fails or message isn't handled
-        if (!panel.classList.contains('open')) {
-          toggleSidebar();
-        }
-      });
+      browser.storage.local.set({ isSidebarOpen: true });
     });
 
     // Listen for events from background worker
     browser.runtime.onMessage.addListener((message) => {
       if (message.action === 'toggle_sidebar') {
-        toggleSidebar();
+        browser.storage.local.get(['isSidebarOpen']).then((result) => {
+          browser.storage.local.set({ isSidebarOpen: !result.isSidebarOpen });
+        });
       }
     });
+  }
+
+  function initAutoOpenOnStartup() {
+    // Check session storage to see if side panel was already opened in this browser session
+    const storageSession =
+      (browser.storage as any).session || browser.storage.local;
+    if (storageSession) {
+      storageSession
+        .get(['wasOpenedThisSession'])
+        .then((result: any) => {
+          if (!result || !result.wasOpenedThisSession) {
+            const handleFirstClick = () => {
+              // Send message to background page to open the side panel
+              browser.runtime
+                .sendMessage({ action: 'open_side_panel_on_gesture' })
+                .then(() => {
+                  // Mark as opened in session storage so no other tabs trigger this
+                  storageSession
+                    .set({ wasOpenedThisSession: true })
+                    .catch(console.error);
+                })
+                .catch(console.error);
+
+              window.removeEventListener('click', handleFirstClick, true);
+            };
+            window.addEventListener('click', handleFirstClick, true);
+          }
+        })
+        .catch(console.error);
+    }
   }
 })();

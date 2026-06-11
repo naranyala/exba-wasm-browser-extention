@@ -12,7 +12,7 @@ wasm-pack build --target web
 cd "$ROOT_DIR"
 
 echo -e "${BLUE}=== Building Extension with Rsbuild ===${NC}"
-npm run build
+bun run build
 
 echo -e "${BLUE}=== Validating Extension Build ===${NC}"
 node "$ROOT_DIR/validate-build.cjs"

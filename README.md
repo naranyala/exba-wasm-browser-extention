@@ -68,7 +68,7 @@ Follow these steps to get the EXBA extension running on your local machine for d
 
 ### 1. Prerequisites
 Ensure you have the following tools installed:
-- **Node.js** (v18+) or **Bun**
+- **Bun** (Latest stable)
 - **Rust & Cargo** (Latest stable)
 - **wasm-pack**: For compiling Rust to WebAssembly.
   ```bash
@@ -76,9 +76,9 @@ Ensure you have the following tools installed:
   ```
 
 ### 2. Prepare the Workspace
-Clone the repository and install the necessary Node dependencies:
+Clone the repository and install the necessary dependencies:
 ```bash
-npm install
+bun install
 ```
 
 ### 3. Build & Run the Extension
@@ -86,10 +86,10 @@ The project uses a unified build script and launcher to make local integration f
 
 ```bash
 # Run the dev server to watch and recompile changes in real-time
-npm run dev
+bun run dev
 
 # (In a separate terminal) Launch Chromium with the extension loaded and isolated profile
-npm run browser
+bun run browser
 ```
 This automatically targets `chromium`, `chromium-browser`, `google-chrome-stable`, or `brave-browser` and loads the extension.
 
@@ -97,8 +97,8 @@ This automatically targets `chromium`, `chromium-browser`, `google-chrome-stable
 
 ## 🔄 Development Workflow
 
--   **Modify Rust logic**: Edit `wasm/src/lib.rs` and run `npm run build` or `./build.sh` to compile the core.
--   **Modify UI/TS/CSS**: Edit files in `src/` (e.g. components or layout stylesheets). The running `npm run dev` server will write updates directly to `dist/` instantly.
+-   **Modify Rust logic**: Edit `wasm/src/lib.rs` and run `bun run build` or `./build.sh` to compile the core.
+-   **Modify UI/TS/CSS**: Edit files in `src/` (e.g. components or layout stylesheets). The running `bun run dev` server will write updates directly to `dist/` instantly.
 -   **Apply Changes**: In your development browser window, the extension updates automatically. If changes are not immediately visible, click the **Reload** icon on the extension's card under `chrome://extensions`.
 
 ---
@@ -109,11 +109,11 @@ The project includes a comprehensive testing suite covering all layers:
 
 -   **TypeScript/JS (Vitest)**: Tests extension logic, Chrome wrappers, and Web Components.
     ```bash
-    npm test
+    bun test
     ```
 -   **Rust Core (wasm-pack)**: Unit tests for WASM algorithms.
     ```bash
-    npm run test:wasm
+    bun run test:wasm
     ```
 
 ---

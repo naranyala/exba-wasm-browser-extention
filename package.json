@@ -17,7 +17,7 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:wasm": "cd wasm && wasm-pack test --node",
-    "prepare": "husky install"
+    "longlines": "./scripts/long-lines.sh"
   },
   "repository": {
     "type": "git",
@@ -38,17 +38,10 @@
     "@vitest/browser": "^4.1.8",
     "chrome-types": "0.1.335",
     "esbuild": "^0.28.0",
-    "husky": "9.1.6",
     "jsdom": "^29.1.1",
-    "lint-staged": "15.2.10",
     "rsbuild-plugin-web-extension": "^1.0.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
-  },
-  "lint-staged": {
-    "**/*.{js,json}": [
-      "biome check --write --no-errors-on-unmatched"
-    ]
   },
   "dependencies": {
     "@tabler/icons": "^3.44.0",

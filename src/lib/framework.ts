@@ -1,4 +1,11 @@
-import { signal, effect, Signal, batch, computed, watch } from './reactivity';
+import {
+  batch,
+  computed,
+  effect,
+  type Signal,
+  signal,
+  watch,
+} from './reactivity';
 
 /**
  * Interface for the Rust WASM engine.
@@ -10,12 +17,17 @@ export interface Engine<TState = any> {
 }
 
 export type InitWasmFn = () => Promise<void>;
-export type EngineConstructor<TState = any> = new (...args: any[]) => Engine<TState>;
+export type EngineConstructor<TState = any> = new (
+  ...args: any[]
+) => Engine<TState>;
 
 /**
  * Define a custom element using the ExbaElement class.
  */
-export function defineExba(name: string, ComponentClass: new () => ExbaElement) {
+export function defineExba(
+  name: string,
+  ComponentClass: new () => ExbaElement,
+) {
   if (!customElements.get(name)) {
     customElements.define(name, ComponentClass);
   }
@@ -24,12 +36,14 @@ export function defineExba(name: string, ComponentClass: new () => ExbaElement) 
 /**
  * ExbaElement - A custom base class for Web Components backed by Rust-WASM core engines.
  */
-export class ExbaElement<TState extends Record<string, any> = any> extends HTMLElement {
+export class ExbaElement<
+  TState extends Record<string, any> = any,
+> extends HTMLElement {
   protected initWasmFn: InitWasmFn;
   protected EngineClass: EngineConstructor<TState>;
   protected initialArgs: any[];
   protected engine: Engine<TState> | null = null;
-  
+
   // The core reactive signal holding our synchronized Rust state
   public state: Signal<TState>;
 
@@ -40,7 +54,11 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
    * @param {EngineConstructor} EngineClass - The Rust WASM engine class (e.g. CoreEngine)
    * @param {Array} initialArgs - Arguments to pass to the engine constructor
    */
-  constructor(initWasmFn: InitWasmFn, EngineClass: EngineConstructor<TState>, initialArgs: any[] = []) {
+  constructor(
+    initWasmFn: InitWasmFn,
+    EngineClass: EngineConstructor<TState>,
+    initialArgs: any[] = [],
+  ) {
     super();
     this.attachShadow({ mode: 'open' });
     this.initWasmFn = initWasmFn;
@@ -93,7 +111,11 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
     return stop;
   }
 
-  watch<T>(source: () => T, cb: (val: T, oldVal: T) => void, options?: { immediate?: boolean }) {
+  watch<T>(
+    source: () => T,
+    cb: (val: T, oldVal: T) => void,
+    options?: { immediate?: boolean },
+  ) {
     const stop = watch(source, cb, options);
     this._disposables.add(stop);
     return stop;
@@ -114,7 +136,11 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
   /**
    * Helper to bind a signal's value to an element's attribute.
    */
-  bindAttr(selector: string, attr: string, fn: (state: TState) => string | boolean | null) {
+  bindAttr(
+    selector: string,
+    attr: string,
+    fn: (state: TState) => string | boolean | null,
+  ) {
     const el = this.shadowRoot?.querySelector(selector);
     if (el) {
       this.effect(() => {
@@ -131,7 +157,11 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
   /**
    * Helper to bind a signal's value to an element's style property.
    */
-  bindStyle(selector: string, prop: keyof CSSStyleDeclaration, fn: (state: TState) => string) {
+  bindStyle(
+    selector: string,
+    prop: keyof CSSStyleDeclaration,
+    fn: (state: TState) => string,
+  ) {
     const el = this.shadowRoot?.querySelector(selector) as HTMLElement | null;
     if (el) {
       this.effect(() => {
@@ -145,15 +175,17 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
    * Efficiently updates the DOM by only re-rendering when the array changes.
    */
   bindList<TItem>(
-    selector: string, 
-    source: (state: TState) => TItem[], 
-    template: (item: TItem, index: number) => string
+    selector: string,
+    source: (state: TState) => TItem[],
+    template: (item: TItem, index: number) => string,
   ) {
     const container = this.shadowRoot?.querySelector(selector);
     if (container) {
       this.effect(() => {
         const items = source(this.state.value) || [];
-        container.innerHTML = items.map((item, index) => template(item, index)).join('');
+        container.innerHTML = items
+          .map((item, index) => template(item, index))
+          .join('');
       });
     }
   }
@@ -169,17 +201,23 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
         this.syncStateToRust();
       };
       el.addEventListener(event, wrappedHandler);
-      this._disposables.add(() => el.removeEventListener(event, wrappedHandler));
+      this._disposables.add(() =>
+        el.removeEventListener(event, wrappedHandler),
+      );
     }
   }
 
   // Lifecycle callback when observed attributes change
-  attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
+  attributeChangedCallback(
+    name: string,
+    oldValue: string | null,
+    newValue: string | null,
+  ) {
     if (oldValue !== newValue && this.engine) {
       // Update state signal and sync to Rust
       this.state.value = {
         ...this.state.value,
-        [name]: newValue
+        [name]: newValue,
       };
       this.syncStateToRust();
     }
@@ -195,8 +233,13 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
   async init() {
     try {
       if (!this.engine) {
-        // 1. Initialize WASM module
-        await this.initWasmFn();
+        // 1. Initialize WASM module with absolute extension URL
+        const chromeObj = (globalThis as any).chrome;
+        const wasmUrl = chromeObj?.runtime?.getURL
+          ? chromeObj.runtime.getURL('wasm/pkg/wasm_unified_core_bg.wasm')
+          : 'wasm/pkg/wasm_unified_core_bg.wasm';
+
+        await (this.initWasmFn as any)({ module_or_path: wasmUrl });
 
         // 2. Instantiate Rust Core Engine
         this.engine = new this.EngineClass(...this.getEngineArgs());
@@ -204,7 +247,7 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
         // 3. Populate initial state from Rust
         this.syncStateFromRust();
       }
-      
+
       // Initial render of the skeleton/base structure
       this.render();
       this.bindEvents();
@@ -248,13 +291,13 @@ export class ExbaElement<TState extends Record<string, any> = any> extends HTMLE
     }
 
     if ((this as any).renderInitial) {
-        (this as any).renderInitial();
+      (this as any).renderInitial();
     }
   }
 
   renderSkeleton() {
     if (this.shadowRoot) {
-        this.shadowRoot.innerHTML = `
+      this.shadowRoot.innerHTML = `
             <style>
               .skeleton-search {
                 height: 38px;

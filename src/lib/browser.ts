@@ -1,7 +1,7 @@
 // @ts-ignore
-if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+if (typeof globalThis.chrome === 'undefined' || !(globalThis as any).chrome.runtime || !(globalThis as any).chrome.runtime.id) {
   // @ts-ignore
-  globalThis.chrome = {
+  (globalThis as any).chrome = {
     runtime: {
       id: 'build-mock',
       getURL: (path: string) => path,

@@ -1,18 +1,23 @@
 import { defineConfig } from '@rsbuild/core';
-import { pluginWebExtension } from 'rsbuild-plugin-web-extension';
 import fs from 'fs';
 import path from 'path';
+import { pluginWebExtension } from 'rsbuild-plugin-web-extension';
 
 const targetBrowser = process.env.BROWSER || 'chrome';
 
 function patchManifestPaths(manifest: any) {
-  const fixPath = (p: string) => p?.replace(/^\.\/src\//, '').replace(/\.ts$/, '.js');
+  const fixPath = (p: string) =>
+    p?.replace(/^\.\/src\//, '').replace(/\.ts$/, '.js');
 
   if (manifest.background?.service_worker) {
-    manifest.background.service_worker = fixPath(manifest.background.service_worker);
+    manifest.background.service_worker = fixPath(
+      manifest.background.service_worker,
+    );
   }
   if (manifest.side_panel?.default_path) {
-    manifest.side_panel.default_path = fixPath(manifest.side_panel.default_path);
+    manifest.side_panel.default_path = fixPath(
+      manifest.side_panel.default_path,
+    );
   }
   if (manifest.content_scripts) {
     for (const cs of manifest.content_scripts) {
@@ -24,7 +29,9 @@ function patchManifestPaths(manifest: any) {
   if (manifest.web_accessible_resources) {
     for (const war of manifest.web_accessible_resources) {
       if (war.resources) {
-        war.resources = war.resources.map((r: string) => r.replace(/^\.\/src\//, ''));
+        war.resources = war.resources.map((r: string) =>
+          r.replace(/^\.\/src\//, ''),
+        );
       }
     }
   }
@@ -35,13 +42,19 @@ export default defineConfig({
   dev: {
     writeToDisk: true,
   },
+  performance: {
+    chunkSplit: {
+      strategy: 'all-in-one',
+    },
+  },
   plugins: [
     pluginWebExtension({
       manifest: {
         manifest_version: 3,
         name: 'Unified Rust-WASM Extension Starter',
         version: '1.0.0',
-        description: 'A unified Manifest V3 extension boilerplate demonstrating Web Components, Rust-WASM, Sidepanels, Alarms, Offscreen DOM, and DNR network filtering.',
+        description:
+          'A unified Manifest V3 extension boilerplate demonstrating Web Components, Rust-WASM, Sidepanels, Alarms, Offscreen DOM, and DNR network filtering.',
         permissions: [
           'storage',
           'activeTab',
@@ -101,7 +114,8 @@ export default defineConfig({
           },
         ],
         content_security_policy: {
-          extension_pages: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'",
+          extension_pages:
+            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'",
         },
         ...(targetBrowser === 'firefox' && {
           browser_specific_settings: {
