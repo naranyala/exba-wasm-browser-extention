@@ -2,6 +2,11 @@ import browser, { chrome } from '../lib/browser';
 import { ExbaElement, defineExba } from '../lib/framework';
 import { signal } from '../lib/reactivity';
 import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
+import L from 'leaflet';
+import { Network } from 'vis-network';
+import { DataSet } from 'vis-data';
+import WaveSurfer from 'wavesurfer.js';
+import 'leaflet/dist/leaflet.css';
 
 interface OpenTab {
   id: string;
@@ -26,6 +31,7 @@ export class WasmDashboard extends ExbaElement {
   renderInitial() {
     if (!this.shadowRoot) return;
     this.shadowRoot.innerHTML = `
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       <style>
         :host { display: block; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
 
@@ -79,6 +85,18 @@ export class WasmDashboard extends ExbaElement {
           font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
           color: #64748b; padding: 0 2px; margin-bottom: 8px; margin-top: 6px;
         }
+        .category-section { margin-bottom: 14px; border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 10px; overflow: hidden; background: rgba(15, 23, 42, 0.2); }
+        .category-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 14px; cursor: pointer; transition: background 0.2s;
+          user-select: none;
+        }
+        .category-header:hover { background: rgba(255, 255, 255, 0.03); }
+        .category-header .category-label { margin: 0; }
+        .category-chevron { transition: transform 0.2s ease; color: #64748b; }
+        .category-header.open .category-chevron { transform: rotate(180deg); color: #818cf8; }
+        .category-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .category-content.open { max-height: 1000px; padding: 0 10px 14px 10px; }
         .category-label:first-child { margin-top: 0; }
 
         /* ── 2-Column Grid ── */
@@ -204,6 +222,29 @@ export class WasmDashboard extends ExbaElement {
         .tree-children.open { max-height: 500px; }
         .tree-meta { font-size: 10px; color: #475569; flex-shrink: 0; }
 
+        /* ── Audio Player Demo ── */
+        .audio-player-container { display: flex; flex-direction: column; gap: 16px; }
+        .waveform-container {
+          background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px; padding: 12px; position: relative; overflow: hidden;
+        }
+        .waveform { width: 100%; height: 100px; }
+        .audio-controls { display: flex; align-items: center; gap: 12px; justify-content: center; }
+        .audio-btn {
+          width: 40px; height: 40px; border-radius: 50%; border: none;
+          background: #6366f1; color: white; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.2s ease; font-family: inherit;
+        }
+        .audio-btn:hover { background: #818cf8; transform: scale(1.05); }
+        .audio-btn.secondary { background: rgba(255, 255, 255, 0.1); color: #f8fafc; }
+        .audio-btn.secondary:hover { background: rgba(255, 255, 255, 0.2); }
+        .audio-file-input {
+          width: 100%; font-size: 12px; color: #94a3b8;
+          background: rgba(30, 41, 59, 0.3); border: 1px dashed rgba(255, 255, 255, 0.2);
+          padding: 10px; border-radius: 8px; cursor: pointer; box-sizing: border-box;
+        }
+
         @keyframes fadeSlide { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
       </style>
 
@@ -244,29 +285,42 @@ export class WasmDashboard extends ExbaElement {
       const container = this.shadowRoot?.querySelector('#categorized-grid');
       if (!container) return;
 
+      // Sort to put "Component Integration" at the top
+      const sortedItems = [...items].sort((a, b) => {
+        if (a.tag === 'Component Integration') return -1;
+        if (b.tag === 'Component Integration') return 1;
+        return 0;
+      });
+
       // Group by tag
       const groups: Record<string, any[]> = {};
-      for (const item of items) {
+      for (const item of sortedItems) {
         const cat = item.tag || 'Other';
         if (!groups[cat]) groups[cat] = [];
         groups[cat].push(item);
       }
 
       let html = '';
-      let globalIndex = 0;
+      const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
       for (const [category, catItems] of Object.entries(groups)) {
-        html += `<div class="category-label">${category}</div>`;
-        html += '<div class="grid-menu">';
+        const isOpen = category === 'Component Integration';
+        html += `
+          <div class="category-section">
+            <div class="category-header ${isOpen ? 'open' : ''}" data-cat-toggle="${category}">
+              <span class="category-label">${category}</span>
+              <span class="category-chevron">${chev}</span>
+            </div>
+            <div class="category-content ${isOpen ? 'open' : ''}" id="cat-content-${category.replace(/\s+/g, '-')}">
+              <div class="grid-menu">`;
         for (const item of catItems) {
           html += `
-            <div class="grid-card" data-index="${globalIndex}" data-cat="${category}">
+            <div class="grid-card" data-action-id="${item.action_id}" data-cat="${category}">
               <div class="card-icon-container">${item.icon_svg}</div>
               <span class="card-title">${item.title}</span>
               <p class="card-desc">${item.description}</p>
             </div>`;
-          globalIndex++;
         }
-        html += '</div>';
+        html += '</div></div></div>';
       }
       container.innerHTML = html;
     });
@@ -307,10 +361,26 @@ export class WasmDashboard extends ExbaElement {
     if (grid) {
       grid.addEventListener('click', (e: Event) => {
         const card = (e.target as HTMLElement).closest('.grid-card') as HTMLElement | null;
-        if (!card) return;
-        const index = Number.parseInt(card.getAttribute('data-index') || '0');
-        const items = this.state.value.filtered_items || [];
-        if (items[index]) this.openTabFromItem(items[index]);
+        if (card) {
+          const actionId = card.getAttribute('data-action-id');
+          const items = this.state.value.filtered_items || [];
+          const item = items.find(i => i.action_id === actionId);
+          if (item) this.openTabFromItem(item);
+          return;
+        }
+
+        const toggle = (e.target as HTMLElement).closest('.category-header') as HTMLElement | null;
+        if (toggle) {
+          const category = toggle.getAttribute('data-cat-toggle');
+          if (category) {
+            const content = this.shadowRoot?.querySelector(`#cat-content-${category.replace(/\s+/g, '-')}`) as HTMLElement;
+            if (content) {
+              toggle.classList.toggle('open');
+              content.classList.toggle('open');
+            }
+          }
+          return;
+        }
       });
     }
 
@@ -353,13 +423,106 @@ export class WasmDashboard extends ExbaElement {
 
     const header = `<div class="detail-header"><div class="detail-icon">${tab.iconSvg}</div><div><div class="detail-title">${tab.title}</div><div class="detail-subtitle">${tab.description}</div></div></div>`;
 
-    if (tabId === 'demo-accordion') { this.renderAccordionDemo(dv, header); }
+    if (tabId === 'demo-audio-player') { this.renderAudioPlayerDemo(dv, header); }
+    else if (tabId === 'demo-accordion') { this.renderAccordionDemo(dv, header); }
     else if (tabId === 'demo-treeview') { this.renderTreeviewDemo(dv, header); }
     else if (tabId === 'demo-tabs') { this.renderTabManagerDemo(dv, header); }
     else if (tabId === 'demo-storage') { this.renderStorageDemo(dv, header); }
     else if (tabId === 'demo-notifications') { this.renderNotificationsDemo(dv, header); }
     else if (tabId === 'demo-alarms') { this.renderAlarmsDemo(dv, header); }
+    else if (tabId === 'demo-bookmarks') { this.renderBookmarksDemo(dv, header); }
+    else if (tabId === 'demo-history') { this.renderHistoryDemo(dv, header); }
+    else if (tabId === 'demo-cookies') { this.renderCookiesDemo(dv, header); }
+    else if (tabId === 'demo-leaflet') { this.renderLeafletDemo(dv, header); }
+    else if (tabId === 'demo-vis-network') { this.renderVisNetworkDemo(dv, header); }
     else { dv.innerHTML = `<div class="detail-panel">${header}<div class="demo-section"><p style="color:#94a3b8;font-size:12.5px">${tab.description}</p></div></div>`; }
+  }
+
+  /* ══ AUDIO PLAYER ══ */
+  private renderAudioPlayerDemo(c: HTMLElement, header: string) {
+    c.innerHTML = `<div class="detail-panel">${header}
+      <div class="demo-section">
+        <div class="demo-label">Local Audio Visualizer</div>
+        <div class="audio-player-container">
+          <div class="demo-row" style="justify-content: space-between; margin-bottom: 8px;">
+            <span id="audio-filename" style="font-size: 11px; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">No file selected</span>
+            <button class="demo-btn small" id="btn-browse">Browse File</button>
+          </div>
+          <input type="file" id="audio-upload" class="audio-file-input" accept="audio/*" style="display: none;">
+          <div class="waveform-container">
+            <div id="waveform" class="waveform"></div>
+            <div id="waveform-placeholder" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #475569; font-size: 12px; pointer-events: none;">
+              Upload an audio file to see waveform
+            </div>
+          </div>
+          <div class="audio-controls">
+            <button class="audio-btn secondary" id="audio-prev">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+            </button>
+            <button class="audio-btn" id="audio-play-pause">
+              <svg id="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <svg id="pause-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+            <button class="audio-btn secondary" id="audio-next">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    const waveformEl = this.shadowRoot?.querySelector('#waveform');
+    const placeholder = this.shadowRoot?.querySelector('#waveform-placeholder');
+    const filenameEl = this.shadowRoot?.querySelector('#audio-filename');
+    if (!waveformEl) return;
+
+    const ws = WaveSurfer.create({
+      container: waveformEl,
+      waveColor: '#475569',
+      progressColor: '#6366f1',
+      cursorColor: '#f8fafc',
+      barWidth: 2,
+      barGap: 3,
+      height: 100,
+    });
+
+    const playPauseBtn = this.shadowRoot?.querySelector('#audio-play-pause');
+    const playIcon = this.shadowRoot?.querySelector('#play-icon');
+    const pauseIcon = this.shadowRoot?.querySelector('#pause-icon');
+
+    const togglePlay = () => {
+      if (!ws.isPlaying() && !ws.getDuration()) return;
+      ws.playPause();
+    };
+
+    playPauseBtn?.addEventListener('click', togglePlay);
+    ws.on('play', () => {
+      if (playIcon && pauseIcon) {
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'block';
+      }
+    });
+    ws.on('pause', () => {
+      if (playIcon && pauseIcon) {
+        playIcon.style.display = 'block';
+        pauseIcon.style.display = 'none';
+      }
+    });
+
+    const uploadInput = this.shadowRoot?.querySelector('#audio-upload') as HTMLInputElement;
+    const browseBtn = this.shadowRoot?.querySelector('#btn-browse');
+    
+    browseBtn?.addEventListener('click', () => uploadInput?.click());
+
+    uploadInput?.addEventListener('change', (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        if (filenameEl) filenameEl.textContent = file.name;
+        if (placeholder) placeholder.style.display = 'none';
+        const url = URL.createObjectURL(file);
+        ws.load(url);
+      }
+    });
   }
 
   /* ══ ACCORDION ══ */
@@ -519,6 +682,148 @@ export class WasmDashboard extends ExbaElement {
     this.shadowRoot?.querySelector('#alarm-clear')?.addEventListener('click', async () => { try { await browser.alarms.clearAll(); setTimeout(load, 200); } catch {} });
     load();
   }
+
+  private renderBookmarksDemo(c: HTMLElement, header: string) {
+    c.innerHTML = `<div class="detail-panel">${header}
+      <div class="demo-section"><div class="demo-label">Bookmark Hierarchy</div><div class="demo-row" style="margin-bottom:8px"><button class="demo-btn small" id="book-refresh">↻ Refresh</button></div><div class="demo-list" id="book-list"><div class="demo-empty">Loading bookmarks...</div></div></div></div>`;
+    const load = async () => {
+      const list = this.shadowRoot?.querySelector('#book-list');
+      if (!list) return;
+      try {
+        const tree = await browser.bookmarks.getTree();
+        const flatten = (nodes: any[], depth = 0): string[] => {
+          let res: string[] = [];
+          for (const n of nodes) {
+            res.push(`${'  '.repeat(depth)} ${n.title || 'Untitled'} ${n.children ? '📁' : '📄'}`);
+            if (n.children) res.push(...flatten(n.children, depth + 1));
+          }
+          return res;
+        };
+        const lines = flatten(tree);
+        if (!lines.length) { list.innerHTML = '<div class="demo-empty">No bookmarks found</div>'; return; }
+        list.innerHTML = `<div class="demo-result" style="white-space:pre; text-align:left">${lines.join('\n')}</div>`;
+      } catch { list.innerHTML = '<div class="demo-empty">bookmarks API not available</div>'; }
+    };
+    this.shadowRoot?.querySelector('#book-refresh')?.addEventListener('click', load);
+    load();
+  }
+
+  private renderHistoryDemo(c: HTMLElement, header: string) {
+    c.innerHTML = `<div class="detail-panel">${header}
+      <div class="demo-section"><div class="demo-label">Recent History</div><div class="demo-row" style="margin-bottom:8px;gap:6px"><input id="hist-search" class="demo-input" placeholder="Search history..." style="flex:1"><button class="demo-btn small" id="hist-search-btn">Search</button></div><div class="demo-list" id="hist-list"><div class="demo-empty">Click search to load history</div></div></div></div>`;
+    const load = async (query = '') => {
+      const list = this.shadowRoot?.querySelector('#hist-list');
+      if (!list) return;
+      try {
+        const results = await browser.history.search({ text: query, maxResults: 50 });
+        if (!results.length) { list.innerHTML = '<div class="demo-empty">No history entries found</div>'; return; }
+        list.innerHTML = results.map((h: any) => `<div class="demo-list-item"><span class="title" title="${h.url}">${h.title || 'Untitled'}</span><span class="meta">${new Date(h.lastVisitTime).toLocaleDateString()}</span></div>`).join('');
+      } catch { list.innerHTML = '<div class="demo-empty">history API not available</div>'; }
+    };
+    this.shadowRoot?.querySelector('#hist-search-btn')?.addEventListener('click', () => {
+      const query = (this.shadowRoot?.querySelector('#hist-search') as HTMLInputElement)?.value || '';
+      load(query);
+    });
+    load();
+  }
+
+  private renderCookiesDemo(c: HTMLElement, header: string) {
+    c.innerHTML = `<div class="detail-panel">${header}
+      <div class="demo-section"><div class="demo-label">Session Cookies</div><div class="demo-row" style="margin-bottom:8px"><button class="demo-btn small" id="cook-refresh">↻ Refresh</button></div><div class="demo-list" id="cook-list"><div class="demo-empty">Loading cookies...</div></div></div></div>`;
+    const load = async () => {
+      const list = this.shadowRoot?.querySelector('#cook-list');
+      if (!list) return;
+      try {
+        const cookies = await browser.cookies.getAll({});
+        if (!cookies.length) { list.innerHTML = '<div class="demo-empty">No cookies found</div>'; return; }
+        list.innerHTML = cookies.map((cookie: any) => `<div class="demo-list-item"><span class="title" title="${cookie.value}">${cookie.name}</span><span class="meta">${cookie.domain}</span></div>`).join('');
+      } catch { list.innerHTML = '<div class="demo-empty">cookies API not available</div>'; }
+    };
+    this.shadowRoot?.querySelector('#cook-refresh')?.addEventListener('click', load);
+    load();
+  }
+
+  private renderLeafletDemo(c: HTMLElement, header: string) {
+    c.innerHTML = `<div class="detail-panel">${header}
+      <div class="demo-section">
+        <div class="demo-label">Interactive Map</div>
+        <div id="map" style="height: 300px; width: 100%; border-radius: 8px; background: #1e293b; display: block; position: relative; z-index: 1;"></div>
+      </div>
+    </div>`;
+    
+    setTimeout(() => {
+      const mapEl = this.shadowRoot?.querySelector('#map');
+      if (!mapEl) return;
+      
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+
+      try {
+        const map = L.map(mapEl, {
+          preferCanvas: true,
+          zoomControl: true
+        }).setView([51.505, -0.09], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        L.marker([51.505, -0.09]).addTo(map)
+          .bindPopup('A Leaflet marker in EXBA!')
+          .openPopup();
+
+        map.invalidateSize();
+
+        const ro = new ResizeObserver(() => {
+          map.invalidateSize();
+        });
+        ro.observe(mapEl);
+
+      } catch (e) {
+        console.error('Leaflet init error:', e);
+      }
+    }, 500);
+  }
+
+  private renderVisNetworkDemo(c: HTMLElement, header: string) {
+    c.innerHTML = `<div class="detail-panel">${header}
+      <div class="demo-section">
+        <div class="demo-label">Mindmap Network</div>
+        <div id="network" style="height: 300px; width: 100%; background: rgba(15, 23, 42, 0.5); border-radius: 8px;"></div>
+      </div>
+    </div>`;
+
+    setTimeout(() => {
+      const netEl = this.shadowRoot?.querySelector('#network');
+      if (!netEl) return;
+
+      const nodes = new DataSet([
+        { id: 1, label: 'EXBA Core', color: '#6366f1', font: { color: 'white' } },
+        { id: 2, label: 'Rust WASM', color: '#f97316' },
+        { id: 3, label: 'TS Framework', color: '#3b82f6' },
+        { id: 4, label: 'Browser APIs', color: '#10b981' },
+        { id: 5, label: 'Reactivity', color: '#a855f7' },
+        { id: 6, label: 'Leaflet', color: '#ef4444' },
+        { id: 7, label: 'Vis-Network', color: '#eab308' },
+      ]);
+
+      const edges = new DataSet([
+        { from: 1, to: 2 }, { from: 1, to: 3 }, { from: 1, to: 4 }, { from: 1, to: 5 },
+        { from: 3, to: 6 }, { from: 3, to: 7 },
+      ]);
+
+      new Network(netEl, { nodes, edges }, {
+        nodes: { shape: 'dot', size: 16, font: { size: 12, color: '#f8fafc' } },
+        edges: { color: '#475569', width: 2 },
+        physics: { enabled: true, stabilization: true },
+      });
+    }, 100);
+  }
+
 
   private closeTab(tabId: string) {
     const tabs = this._openTabs.value.filter(t => t.id !== tabId);

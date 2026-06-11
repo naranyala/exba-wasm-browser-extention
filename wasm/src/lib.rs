@@ -105,6 +105,55 @@ fn get_all_menu_items() -> Vec<MenuItem> {
             icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/></svg>"#.to_string(),
             action_id: "demo-alarms".to_string(),
         },
+        MenuItem {
+            title: "Bookmarks Explorer".to_string(),
+            description: "Browse and manage your browser's bookmark hierarchy.".to_string(),
+            tag: "Browser API".to_string(),
+            tag_class: "tag-basic".to_string(),
+            icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>"#.to_string(),
+            action_id: "demo-bookmarks".to_string(),
+        },
+        MenuItem {
+            title: "History Explorer".to_string(),
+            description: "Inspect and search your browsing history.".to_string(),
+            tag: "Browser API".to_string(),
+            tag_class: "tag-basic".to_string(),
+            icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4-2"/></svg>"#.to_string(),
+            action_id: "demo-history".to_string(),
+        },
+        MenuItem {
+            title: "Cookies Explorer".to_string(),
+            description: "View and manage cookies for the current session.".to_string(),
+            tag: "Browser API".to_string(),
+            tag_class: "tag-basic".to_string(),
+            icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/><path d="M12 12v.01"/><path d="M15.5 8.5v.01"/><path d="M12 15.5v.01"/><path d="M8.5 15.5v.01"/><path d="M15.5 15.5v.01"/></svg>"#.to_string(),
+            action_id: "demo-cookies".to_string(),
+        },
+        // ── Component Integration ──
+        MenuItem {
+            title: "Audio Visualizer".to_string(),
+            description: "Audio player with real-time Web Audio waveform visualization.".to_string(),
+            tag: "Component Integration".to_string(),
+            tag_class: "tag-int".to_string(),
+            icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>"#.to_string(),
+            action_id: "demo-audio-player".to_string(),
+        },
+        MenuItem {
+            title: "Leaflet Map".to_string(),
+            description: "Interactive map integration using Leaflet.js.".to_string(),
+            tag: "Component Integration".to_string(),
+            tag_class: "tag-int".to_string(),
+            icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>"#.to_string(),
+            action_id: "demo-leaflet".to_string(),
+        },
+        MenuItem {
+            title: "Mindmap Network".to_string(),
+            description: "Dynamic graph visualization using vis-network.".to_string(),
+            tag: "Component Integration".to_string(),
+            tag_class: "tag-int".to_string(),
+            icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 18l12-12"/></svg>"#.to_string(),
+            action_id: "demo-vis-network".to_string(),
+        },
     ]
 }
 
