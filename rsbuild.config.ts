@@ -55,19 +55,19 @@ export default defineConfig({
         version: '1.0.0',
         description:
           'A unified Manifest V3 extension boilerplate demonstrating Web Components, Rust-WASM, Sidepanels, Alarms, Offscreen DOM, and DNR network filtering.',
-          permissions: [
-            'storage',
-            'activeTab',
-            'scripting',
-            'sidePanel',
-            'offscreen',
-            'alarms',
-            'declarativeNetRequest',
-            'contextMenus',
-            'bookmarks',
-            'history',
-            'cookies',
-          ],
+        permissions: [
+          'storage',
+          'activeTab',
+          'scripting',
+          'sidePanel',
+          'offscreen',
+          'alarms',
+          'declarativeNetRequest',
+          'contextMenus',
+          'bookmarks',
+          'history',
+          'cookies',
+        ],
         host_permissions: ['<all_urls>'],
         background: {
           service_worker: './src/background.ts',
@@ -119,7 +119,6 @@ export default defineConfig({
         content_security_policy: {
           extension_pages:
             "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://unpkg.com https://*.tile.openstreetmap.org; object-src 'none'",
-
         },
         ...(targetBrowser === 'firefox' && {
           browser_specific_settings: {

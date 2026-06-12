@@ -55,7 +55,8 @@
       "!**/node_modules",
       "!**/wasm/pkg",
       "!**/wasm/target",
-      "!**/dist"
+      "!**/dist",
+      "!**/.chrome-profile"
     ]
   }
 }

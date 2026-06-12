@@ -12,7 +12,10 @@ browser.runtime.onMessage.addListener((message) => {
       return Promise.resolve({ success: true });
     } catch (err) {
       document.body.removeChild(textArea);
-      return Promise.resolve({ success: false, error: (err as any).toString() });
+      return Promise.resolve({
+        success: false,
+        error: (err as any).toString(),
+      });
     }
   }
   return false;

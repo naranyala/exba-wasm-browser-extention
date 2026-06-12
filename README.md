@@ -1,125 +1,218 @@
 # Unified Rust-WASM Chrome Extension Starter (EXBA)
 
-A high-performance, Manifest V3 Chrome Extension powered by **Rust**, **WebAssembly**, and the **EXBA (Extended Browser API)** framework. This boilerplate avoids heavy SPA frameworks in favor of browser-native primitives, a custom reactivity engine, and a high-performance Rust core.
+A production-grade Manifest V3 Chrome Extension powered by **Rust**, **WebAssembly**, and the **EXBA** meta-framework. Combines a custom signal-reactive UI layer with a compiled Rust core for high-performance browser extension development — no heavy SPA framework required.
 
 ---
 
-## 🚀 Key Architectural Features
+## Meta-Framework Surface
 
--   **Zero-Framework UI**: Uses native **Web Components** (Shadow DOM) and the **EXBA** framework base class (`ExbaElement` inside `src/lib/framework.ts`) for true encapsulation without the "framework tax."
--   **Custom Reactivity Primitives**: A bespoke, lightweight reactivity system (Signals, Effects, Computeds & Watches) implemented from scratch in `src/lib/reactivity.ts`. This ensures zero external dependencies and full control over the rendering lifecycle.
--   **Security & CSP Compliance**: Clean, script-free HTML templates in `public/` mapped to modular compiled entry scripts in `src/` (such as `popup.ts`, `options.ts`, `sidepanel.ts`). This strictly complies with Manifest V3's ban on inline scripts.
--   **Rust-WASM Core**: Offloads heavy computations (fuzzy subsequence matching, cryptography, algorithms) to a compiled Rust engine inside the `wasm/` directory.
--   **Local Integration Launcher**: An automated launcher (`run-browser.sh`) that auto-detects `chromium`, `brave`, or `google-chrome` and spins up a dedicated development session with an isolated, persistent profile (`.chrome-profile/`).
--   **Injected EXBA Command Bar (Dock)**: A floating macOS-like glassmorphic dock injected on target webpage layouts. Includes quick-trigger controls, settings navigation, panel toggling, and minimizes into a pinned circular **EXBA** badge.
--   **Native Chrome Side Panel**: Pinned toolbar action clicks (`openPanelOnActionClick: true`) and right-click Context Menus ("Toggle EXBA Panel") launch the native side panel directly, housing the reactive search dashboard.
--   **Manifest V3 Ready**: Fully compliant with MV3 standards, including Service Workers, Declarative Net Request rules, and Offscreen Documents.
+The EXBA framework is a **browser-native, signal-reactive, WASM-backed component system** built from scratch. Every layer is designed for composition, type safety, and zero-overhead DOM updates.
+
+### Reactivity System (`src/lib/reactivity.ts`)
+
+Fine-grained dependency tracking inspired by SolidJS, implemented in ~180 lines.
+
+| Primitive | Purpose |
+|-----------|---------|
+| `signal(value)` | Create a reactive value container. Reading `.value` inside an `effect` auto-subscribes; assigning `.value` triggers subscribers. |
+| `computed(fn)` | Derive a read-only reactive value that re-computes only when its tracked dependencies change. |
+| `effect(fn)` | Run a function, tracking every signal read. Re-runs automatically when any tracked signal changes. Returns a dispose function. |
+| `watch(source, cb)` | Observe a signal for changes. Accepts `{ immediate: true }` to fire immediately. |
+| `batch(fn)` | Group multiple signal writes into a single notification cycle. Pending subscribers flush once after the batch completes. |
+| `untrack(fn)` | Execute a function without creating any signal subscriptions. Useful for reading signal values inside callbacks. |
+| `createStore(initial)` | **Deep reactive proxy** — each property becomes its own tracked signal. Reading `store.foo` inside an effect only tracks `foo`; changing `store.bar` does **not** re-run effects that only read `store.foo`. |
+
+### WASM Integration Layer
+
+Bidirectional TypeScript↔Rust bridge with typed dispatch, event streaming, and schema validation.
+
+| Module | Files | Purpose |
+|--------|-------|---------|
+| `WasmClient` | `src/lib/wasm-client.ts` | Typed reactive wrapper around the Rust `CoreEngine`. Manages action dispatch, state sync, manifest caching, and auto-polling. |
+| `WasmEventBus` | `src/lib/wasm-event-bus.ts` | Reactive event stream. Subscribe to module-specific, event-name-specific, or wildcard events emitted by Rust modules. |
+| `wasm-bridge.ts` | `src/lib/wasm-bridge.ts` | Low-level helpers: `loadWasmModule`, `dispatchAction`, `drainEvents`, `syncStateFromRust`, `syncStateToRust`, `getStateValue`, `setStateValue`, `validateState`. |
+| `wasm-types.d.ts` | `src/wasm-types.d.ts` | Auto-generated TypeScript interfaces from wasm-bindgen: `WasmModuleManifest`, `WasmDispatchResult`, `WasmModuleEvent`, `WasmModuleError`. |
+
+### Component System
+
+Shadow DOM Web Components backed by a shared Rust engine instance.
+
+| File | Purpose |
+|------|---------|
+| `framework.ts` | `ExbaElement<TState>` — base class with WASM init, state sync, signal binding helpers, and lifecycle hooks. |
+| `register-component.ts` | `createWasmComponent(config)` — factory for ergonomic component definition with render/effect/mount callbacks. |
+
+**Lifecycle**: `connectedCallback` → `init()` (WASM engine) → `render()` → `setupEffects()` → `onMounted()` → `disconnectedCallback` → `onUnmounted()`.
+
+**Convenience methods on ExbaElement**:
+- `bindText(sel, fn)` / `bindAttr(sel, attr, fn)` / `bindStyle(sel, prop, fn)` / `bindList(sel, src, tmpl)` — reactive DOM bindings
+- `on(sel, event, handler)` — event listener with auto state sync
+- `$(sel)` / `$$(sel)` — shadow DOM query shortcuts
+
+### Rendering Primitives (`src/lib/render.ts`)
+
+Composable DOM management functions that solve the five gaps blocking complex UI creation.
+
+| Primitive | Signature | What it solves |
+|-----------|-----------|----------------|
+| `createShow` | `{ mount, when, children, fallback? }` | **Conditional DOM** — creates content when `when()` is truthy, destroys when falsy. Proper create/destroy lifecycle. |
+| `createFor` | `{ mount, each, keyed?, children }` | **Keyed list** — items identified by key. Only patches DOM for changed items. Preserves focus, scroll, form state. **Updates DOM content** when existing items change. |
+| `createBindValue` | `(el, get, set)` | **Two-way input binding** — signal → input.value + input event → setter. One-liner instead of manual listeners. |
+| `createClassList` | `(el, classes)` | **Reactive classes** — toggle `el.classList` based on signal values. |
+| `createRef` | `(initial?)` | **Element reference** — mutable `.current` for capturing DOM nodes. Not reactive; for third-party lib integrations. |
+| `html` | tagged template literal | **Template to DOM** — `html\`<li>${name}</li>\`` → `DocumentFragment`. One-shot, not reactive. |
+
+### Context API (`src/lib/context.ts`)
+
+Dependency injection for the component tree. No prop threading needed.
+
+| Primitive | Purpose |
+|-----------|---------|
+| `createContext<T>(default)` | Define a typed context key. |
+| `provideContext(key, value)` | Push a value onto the context stack. Returns a dispose function. |
+| `useContext(key)` | Walk up the context stack and return the nearest provided value, or default. |
+
+### Rust Module System (`wasm/src/`)
+
+Static module registry with dynamic action dispatch.
+
+| Concept | Description |
+|---------|-------------|
+| `ModuleDef` | Static definition: name, description, state_keys, optional `ActionHandler` function pointer. |
+| `dispatch_action(module, action, params)` | Routes to the correct module's handler. Returns `DispatchResult { ok, data?, error?, events? }`. |
+| `ModuleEvent { module, name, data }` | Events emitted during action handling, drained by JS via `drain_events()`. |
+| `ModuleError { code, message, details }` | Structured error returned on handler failure. |
+| `scaffold-module.sh` | Generates full-stack Rust module + TypeScript Web Component. |
+| `gen-wasm-types.ts` | Auto-generates `wasm-types.d.ts` from wasm-bindgen output. |
 
 ---
 
-## 🛠️ Integrated Demos
+## Architecture
 
-1.  **Reactive Dashboard**: A searchable grid of extension tools. Typing in the search bar triggers subsequence-based fuzzy matching in **Rust**, which reactively filters the UI via **Signals**.
-2.  **EXBA Command Bar**: Injected on webpages to toggle the side panel, open settings, or collapse into a minimized badge.
-3.  **Security Suite**:
-    *   **Password Generator**: Cryptographically secure generation performed in Rust using the `getrandom` crate.
-    *   **SHA-256 Hasher**: High-speed hashing using the Rust `sha2` crate.
-4.  **Performance Benchmarking**: A JS vs. Rust Fibonacci comparison tool to demonstrate WASM execution speed.
-5.  **Background Alarms**: Service worker-managed alarms that push real-time updates to open extension pages.
-6.  **Offscreen Clipboard**: Accesses the System Clipboard from a Service Worker context using an Offscreen Document.
-7.  **Network Filtering**: Demonstrates `declarativeNetRequest` for blocking advertising trackers (e.g. doubleclick.net) and modifying request headers.
-
----
-
-## 📦 Directory Structure
-
-```text
-├── src/
-│   ├── background.ts       # Service worker handling alarms, clipboard, & navigation
-│   ├── content.ts          # Injects the floating Command Bar & collapsed Badge into webpage DOM
-│   ├── offscreen.ts        # Service worker clipboard helper
-│   ├── options.ts          # Options configurations script & benchmark triggers
-│   ├── sidepanel.ts        # Sidebar Dashboard entry script
-│   ├── popup.ts            # Extension action popup entry script
-│   ├── components/         # Reactive Web Components
-│   │   ├── wasm-dashboard.ts # Main UI with fuzzy search & security tools
-│   │   └── wasm-benchmark.ts # JS vs Rust speed comparison
-│   └── lib/                # Shared utilities, reactivity engine, & framework
-│       ├── chrome.ts       # Type-safe Chrome API wrappers
-│       ├── reactivity.ts   # Custom zero-dependency reactivity system (Signals)
-│       ├── framework.ts    # EXBA framework base class (ExbaElement)
-│       └── ui.ts           # UI helper utilities (Spinner, EscapeHTML)
-├── wasm/                   # Rust Core Crate
-│   ├── src/lib.rs          # Core logic, state management, & algorithms
-│   └── Cargo.toml          # Rust dependencies (sha2, getrandom, serde)
-├── public/                 # Static assets & HTML templates
-│   ├── manifest.json       # Extension configuration (permissions, DNR, commands)
-│   └── *.html              # Page HTML templates (dynamically compiled by Rsbuild)
-├── dist/                   # Compiled & bundled output (load this in Chrome)
-├── rsbuild.config.ts       # Extension-specific bundling configuration
-└── build.sh                # Unified build script (Rust + TS)
+```
+TypeScript Layer                    Rust WASM Layer
+┌───────────────────┐              ┌──────────────────────┐
+│  ExbaElement      │ ◄─ JSON ──► │  CoreEngine          │
+│  - state: Signal  │   state      │  - Map<String,Value> │
+│  - wasm: Client   │              │  - ModuleDef[]       │
+│  - effects[]      │              │  - Event queue       │
+├───────────────────┤  dispatch    ├──────────────────────┤
+│  WasmClient       │ ────action──►│  modules/            │
+│  - call()         │              │  ├─ fuzzy.rs         │
+│  - pullState()    │ ◄─ events ── │  ├─ crypto.rs        │
+│  - events (bus)   │              │  ├─ menu.rs          │
+├───────────────────┤              │  └─ text.rs          │
+│  createShow/For   │              └──────────────────────┘
+│  bindValue/Ref    │
+│  createStore()    │
+│  Context API      │
+└───────────────────┘
 ```
 
 ---
 
-## 🛠️ Installation & Local Setup
+## Directory Structure
 
-Follow these steps to get the EXBA extension running on your local machine for development.
+```
+├── src/
+│   ├── background.ts        # Service worker (alarms, clipboard, navigation)
+│   ├── content.ts           # Injected command bar & badge
+│   ├── sidepanel.ts         # Side panel entry
+│   ├── popup.ts             # Popup entry
+│   ├── options.ts           # Options page with module manifest viewer
+│   ├── components/
+│   │   ├── wasm-dashboard.ts   # Main searchable dashboard (12 demos)
+│   │   ├── wasm-benchmark.ts   # JS vs WASM speed comparison
+│   │   └── wasm-inspector.ts   # Dev inspector for WASM modules
+│   └── lib/
+│       ├── reactivity.ts       # Signal system + createStore + untrack
+│       ├── render.ts           # Show, For, bindValue, classList, ref, html
+│       ├── context.ts          # Context API (DI for component tree)
+│       ├── framework.ts        # ExbaElement base class
+│       ├── register-component.ts # createWasmComponent factory
+│       ├── wasm-client.ts      # Typed WASM wrapper
+│       ├── wasm-event-bus.ts   # Reactive event stream
+│       ├── wasm-bridge.ts      # Low-level WASM helpers
+│       ├── browser.ts          # Cross-browser API wrapper
+│       └── ui.ts               # Spinner, escapeHTML helpers
+├── wasm/                      # Rust crate
+│   ├── src/
+│   │   ├── lib.rs             # Crate entry
+│   │   ├── engine.rs          # CoreEngine wasm_bindgen struct
+│   │   ├── module_system.rs   # ModuleDef, dispatch, errors, events
+│   │   └── modules/           # Module implementations
+│   │       ├── mod.rs         # Registry (all_defs)
+│   │       ├── fuzzy.rs       # Subsequence matching
+│   │       ├── menu.rs        # Menu items with search/filter
+│   │       ├── crypto.rs      # Password generation, SHA-256
+│   │       └── text.rs        # Text transformation
+│   └── scripts/
+│       └── scaffold-module.sh # Full-stack module generator
+├── scripts/
+│   └── gen-wasm-types.ts      # Auto-generate TS types from WASM
+├── public/                    # Static HTML/manifest
+└── rsbuild.config.ts          # Bundler config
+```
 
-### 1. Prerequisites
-Ensure you have the following tools installed:
-- **Bun** (Latest stable)
-- **Rust & Cargo** (Latest stable)
-- **wasm-pack**: For compiling Rust to WebAssembly.
-  ```bash
-  cargo install wasm-pack
-  ```
+---
 
-### 2. Prepare the Workspace
-Clone the repository and install the necessary dependencies:
+## npm Scripts
+
+| Command | Purpose |
+|---------|---------|
+| `npm run dev` | Start dev server with HMR |
+| `npm run build` | Production build (TS + Rust) + validation |
+| `npm test` | Run TypeScript tests (Vitest) |
+| `npm run wasm:build` | Compile Rust to WASM |
+| `npm run wasm:test` | Run Rust tests |
+| `npm run wasm:module` | Scaffold a new module |
+| `npm run wasm:types` | Regenerate TypeScript types |
+| `npm run wasm:full` | Build + types |
+| `npm run lint` | Biome check |
+
+---
+
+## Creating a New Module
+
+```bash
+# Scaffold a Rust module + TypeScript Web Component
+npm run wasm:module
+# Enter the module name when prompted
+# Files created:
+#   wasm/src/modules/<name>.rs
+#   src/components/wasm-<name>.ts
+
+# Then:
+npm run wasm:full    # Compile Rust + regenerate TS types
+npm run build        # Full build
+```
+
+---
+
+## Installation
+
 ```bash
 bun install
+bun run dev          # TS dev server
+bun run browser      # Launch Chromium with extension
 ```
 
-### 3. Build & Run the Extension
-The project uses a unified build script and launcher to make local integration frictionless.
+---
+
+## Testing
 
 ```bash
-# Run the dev server to watch and recompile changes in real-time
-bun run dev
-
-# (In a separate terminal) Launch Chromium with the extension loaded and isolated profile
-bun run browser
+npm test              # TypeScript tests (Vitest)
+npm run wasm:test     # Rust tests (wasm-pack)
 ```
-This automatically targets `chromium`, `chromium-browser`, `google-chrome-stable`, or `brave-browser` and loads the extension.
 
 ---
 
-## 🔄 Development Workflow
+## Key Design Decisions
 
--   **Modify Rust logic**: Edit `wasm/src/lib.rs` and run `bun run build` or `./build.sh` to compile the core.
--   **Modify UI/TS/CSS**: Edit files in `src/` (e.g. components or layout stylesheets). The running `bun run dev` server will write updates directly to `dist/` instantly.
--   **Apply Changes**: In your development browser window, the extension updates automatically. If changes are not immediately visible, click the **Reload** icon on the extension's card under `chrome://extensions`.
-
----
-
-## 🧪 Testing Suite
-
-The project includes a comprehensive testing suite covering all layers:
-
--   **TypeScript/JS (Vitest)**: Tests extension logic, Chrome wrappers, and Web Components.
-    ```bash
-    bun test
-    ```
--   **Rust Core (wasm-pack)**: Unit tests for WASM algorithms.
-    ```bash
-    bun run test:wasm
-    ```
-
----
-
-## 🛡️ Security & WASM Policy
-Google Chrome's Manifest V3 requires all WASM to be local:
-- The WASM binary is bundled inside the extension (no remote loading).
-- CSP includes `'wasm-unsafe-eval'` for local WASM execution.
-- Reviewers are informed that WASM is used for client-side compute (cryptography/matching).
+- **State as `Map<String, Value>`** instead of typed struct: enables fully dynamic module state without recompilation.
+- **Action handlers receive only their module's owned state keys**: cleaner encapsulation than full engine access.
+- **Events use drain/poll model** instead of JS callbacks: avoids closure lifetime issues in wasm-bindgen.
+- **`createStore` over plain `signal`**: each property is independently tracked — changing one key doesn't invalidate effects reading other keys.
+- **Context stack instead of explicit props**: services like WasmClient, theme, and preferences flow through the component tree without constructor threading.
+- **No virtual DOM**: direct DOM manipulation via `insertBefore`/`replaceChild` with comment anchors for identity tracking.

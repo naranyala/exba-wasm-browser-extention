@@ -145,7 +145,7 @@ export function effect(fn: () => void): () => void {
       } finally {
         activeSubscriber = prevSubscriber;
       }
-    }
+    },
   };
   subscriber.run();
   return () => {
@@ -156,7 +156,11 @@ export function effect(fn: () => void): () => void {
   };
 }
 
-export function watch<T>(source: () => T, cb: (val: T, oldVal: T) => void, options: { immediate?: boolean } = {}) {
+export function watch<T>(
+  source: () => T,
+  cb: (val: T, oldVal: T) => void,
+  options: { immediate?: boolean } = {},
+) {
   let oldVal: T;
   let firstRun = true;
   const stop = effect(() => {
@@ -173,4 +177,92 @@ export function watch<T>(source: () => T, cb: (val: T, oldVal: T) => void, optio
     }
   });
   return stop;
+}
+
+// ════════════════════════════════════════════════════════════
+//  untrack — Read signals without creating dependencies
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Execute a function without tracking any signal reads inside it.
+ * Useful for reading signal values in callbacks without creating subscriptions.
+ *
+ * @example
+ * ```ts
+ * const count = untrack(() => state.value.count);
+ * ```
+ */
+export function untrack<T>(fn: () => T): T {
+  const prev = activeSubscriber;
+  activeSubscriber = null;
+  try {
+    return fn();
+  } finally {
+    activeSubscriber = prev;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  createStore — Deep reactive proxy store
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Create a deep reactive store with path-level tracking.
+ * Each property access inside an effect is individually tracked,
+ * so changing one key only triggers effects that read that specific key.
+ *
+ * Unlike a plain `signal({})`, this enables fine-grained reactivity
+ * where changing `store.foo` won't re-run effects that only read `store.bar`.
+ *
+ * @example
+ * ```ts
+ * const store = createStore({ count: 0, name: 'hello' });
+ *
+ * effect(() => {
+ *   console.log(store.count); // only re-runs when count changes
+ * });
+ *
+ * store.count = 5; // triggers the effect above
+ * store.name = 'world'; // does NOT trigger it
+ * ```
+ */
+export function createStore<T extends Record<string, unknown>>(initial: T): T {
+  const _target = { ...initial } as Record<string, unknown>;
+  const _signals = new Map<string, Signal<any>>();
+
+  const getSignal = (key: string): Signal<any> => {
+    if (!_signals.has(key)) {
+      _signals.set(key, signal(_target[key]));
+    }
+    return _signals.get(key)!;
+  };
+
+  return new Proxy(_target, {
+    get(_target, key: string | symbol) {
+      if (typeof key !== 'string') return (_target as any)[key];
+      return getSignal(key).value;
+    },
+    set(_target, key: string | symbol, value: unknown) {
+      if (typeof key !== 'string') {
+        (_target as any)[key] = value;
+        return true;
+      }
+      const sig = getSignal(key);
+      if (sig.peek() !== value) {
+        _target[key] = value;
+        sig.value = value;
+      }
+      return true;
+    },
+    has(_target, key) {
+      if (typeof key === 'string' && _signals.has(key)) return true;
+      return key in _target;
+    },
+    ownKeys(_target) {
+      return Reflect.ownKeys(_target);
+    },
+    getOwnPropertyDescriptor(_target, key) {
+      return Reflect.getOwnPropertyDescriptor(_target, key);
+    },
+  }) as unknown as T;
 }

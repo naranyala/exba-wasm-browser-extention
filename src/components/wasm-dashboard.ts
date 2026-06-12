@@ -1,11 +1,11 @@
-import browser, { chrome } from '../lib/browser';
-import { ExbaElement, defineExba } from '../lib/framework';
-import { signal } from '../lib/reactivity';
-import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
 import L from 'leaflet';
-import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
+import { Network } from 'vis-network';
 import WaveSurfer from 'wavesurfer.js';
+import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
+import browser, { chrome } from '../lib/browser';
+import { defineExba, ExbaElement, html } from '../lib/framework';
+import { signal } from '../lib/reactivity';
 import 'leaflet/dist/leaflet.css';
 
 interface OpenTab {
@@ -245,6 +245,8 @@ export class WasmDashboard extends ExbaElement {
           padding: 10px; border-radius: 8px; cursor: pointer; box-sizing: border-box;
         }
 
+        .home-view-hidden { display: none !important; }
+        .detail-view-hidden { display: none !important; }
         @keyframes fadeSlide { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
       </style>
 
@@ -279,59 +281,67 @@ export class WasmDashboard extends ExbaElement {
     });
     this.bindText('#search-status', () => searchStatus.value);
 
-    // Render categorized grid
-    this.effect(() => {
-      const items = this.state.value.filtered_items || [];
-      const container = this.shadowRoot?.querySelector('#categorized-grid');
-      if (!container) return;
+    // Render categorized grid with keyed DOM reuse
+    const chevronSvg =
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 
-      // Sort to put "Component Integration" at the top
-      const sortedItems = [...items].sort((a, b) => {
-        if (a.tag === 'Component Integration') return -1;
-        if (b.tag === 'Component Integration') return 1;
-        return 0;
-      });
-
-      // Group by tag
-      const groups: Record<string, any[]> = {};
-      for (const item of sortedItems) {
-        const cat = item.tag || 'Other';
-        if (!groups[cat]) groups[cat] = [];
-        groups[cat].push(item);
-      }
-
-      let html = '';
-      const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
-      for (const [category, catItems] of Object.entries(groups)) {
-        const isOpen = category === 'Component Integration';
-        html += `
-          <div class="category-section">
-            <div class="category-header ${isOpen ? 'open' : ''}" data-cat-toggle="${category}">
-              <span class="category-label">${category}</span>
-              <span class="category-chevron">${chev}</span>
-            </div>
-            <div class="category-content ${isOpen ? 'open' : ''}" id="cat-content-${category.replace(/\s+/g, '-')}">
-              <div class="grid-menu">`;
-        for (const item of catItems) {
-          html += `
-            <div class="grid-card" data-action-id="${item.action_id}" data-cat="${category}">
-              <div class="card-icon-container">${item.icon_svg}</div>
-              <span class="card-title">${item.title}</span>
-              <p class="card-desc">${item.description}</p>
-            </div>`;
+    this.for({
+      mount: '#categorized-grid',
+      each: () => {
+        const items = this.state.value.filtered_items || [];
+        const sorted = [...items].sort((a, b) => {
+          if (a.tag === 'Component Integration') return -1;
+          if (b.tag === 'Component Integration') return 1;
+          return 0;
+        });
+        // Convert flat items into category groups
+        const groups: Record<string, any[]> = {};
+        for (const item of sorted) {
+          const cat = item.tag || 'Other';
+          if (!groups[cat]) groups[cat] = [];
+          groups[cat].push(item);
         }
-        html += '</div></div></div>';
-      }
-      container.innerHTML = html;
+        return Object.entries(groups).map(([cat, catItems], gi) => ({
+          id: `cat-${cat.replace(/\s+/g, '-')}`,
+          category: cat,
+          items: catItems,
+          isOpen: cat === 'Component Integration',
+        }));
+      },
+      keyed: (g) => g.id,
+      children: (group) => {
+        const id = `cat-content-${group.category.replace(/\s+/g, '-')}`;
+        const section = document.createElement('div');
+        section.className = 'category-section';
+        section.innerHTML = `
+          <div class="category-header ${group.isOpen ? 'open' : ''}" data-cat-toggle="${group.category}">
+            <span class="category-label">${group.category}</span>
+            <span class="category-chevron">${chevronSvg}</span>
+          </div>
+          <div class="category-content ${group.isOpen ? 'open' : ''}" id="${id}">
+            <div class="grid-menu" id="${id}-grid">
+              ${group.items
+                .map(
+                  (item: any) => `
+                <div class="grid-card" data-action-id="${item.action_id}" data-cat="${group.category}">
+                  <div class="card-icon-container">${item.icon_svg}</div>
+                  <span class="card-title">${item.title}</span>
+                  <p class="card-desc">${item.description}</p>
+                </div>
+              `,
+                )
+                .join('')}
+            </div>
+          </div>`;
+        return section;
+      },
     });
 
-    this.effect(() => {
-      const view = this._activeView.value;
-      const homeView = this.shadowRoot?.querySelector('#home-view') as HTMLElement;
-      const detailView = this.shadowRoot?.querySelector('#detail-view') as HTMLElement;
-      if (!homeView || !detailView) return;
-      homeView.style.display = view === 'home' ? 'block' : 'none';
-      detailView.style.display = view === 'home' ? 'none' : 'block';
+    this.toggleClass('#home-view', {
+      'home-view-hidden': () => this._activeView.value !== 'home',
+    });
+    this.toggleClass('#detail-view', {
+      'detail-view-hidden': () => this._activeView.value === 'home',
     });
 
     this.effect(() => {
@@ -342,17 +352,40 @@ export class WasmDashboard extends ExbaElement {
   }
 
   bindEvents() {
-    const searchInput = this.shadowRoot?.querySelector('#search-input') as HTMLInputElement;
+    const searchInput = this.shadowRoot?.querySelector(
+      '#search-input',
+    ) as HTMLInputElement;
     if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        if (this.engine) { this.engine.set_search_query(searchInput.value); this.syncStateFromRust(); }
-      });
+      // Two-way reactive binding for search
+      this.bindValue(
+        '#search-input',
+        () => this.state.value.search_query || '',
+        (val) => {
+          if (this.engine) {
+            this.engine.set_search_query(val);
+            this.syncStateFromRust();
+          }
+        },
+      );
       searchInput.addEventListener('keydown', (e: KeyboardEvent) => {
         const items = this.state.value.filtered_items || [];
         const max = items.length;
-        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); this._selectedIndex.value = Math.min(this._selectedIndex.value + 1, max - 1); }
-        else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); this._selectedIndex.value = Math.max(this._selectedIndex.value - 1, 0); }
-        else if (e.key === 'Enter' && max > 0) { const item = items[this._selectedIndex.value]; if (item) this.openTabFromItem(item); }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          this._selectedIndex.value = Math.min(
+            this._selectedIndex.value + 1,
+            max - 1,
+          );
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          this._selectedIndex.value = Math.max(
+            this._selectedIndex.value - 1,
+            0,
+          );
+        } else if (e.key === 'Enter' && max > 0) {
+          const item = items[this._selectedIndex.value];
+          if (item) this.openTabFromItem(item);
+        }
       });
     }
 
@@ -360,20 +393,26 @@ export class WasmDashboard extends ExbaElement {
     const grid = this.shadowRoot?.querySelector('#categorized-grid');
     if (grid) {
       grid.addEventListener('click', (e: Event) => {
-        const card = (e.target as HTMLElement).closest('.grid-card') as HTMLElement | null;
+        const card = (e.target as HTMLElement).closest(
+          '.grid-card',
+        ) as HTMLElement | null;
         if (card) {
           const actionId = card.getAttribute('data-action-id');
           const items = this.state.value.filtered_items || [];
-          const item = items.find(i => i.action_id === actionId);
+          const item = items.find((i) => i.action_id === actionId);
           if (item) this.openTabFromItem(item);
           return;
         }
 
-        const toggle = (e.target as HTMLElement).closest('.category-header') as HTMLElement | null;
+        const toggle = (e.target as HTMLElement).closest(
+          '.category-header',
+        ) as HTMLElement | null;
         if (toggle) {
           const category = toggle.getAttribute('data-cat-toggle');
           if (category) {
-            const content = this.shadowRoot?.querySelector(`#cat-content-${category.replace(/\s+/g, '-')}`) as HTMLElement;
+            const content = this.shadowRoot?.querySelector(
+              `#cat-content-${category.replace(/\s+/g, '-')}`,
+            ) as HTMLElement;
             if (content) {
               toggle.classList.toggle('open');
               content.classList.toggle('open');
@@ -390,10 +429,24 @@ export class WasmDashboard extends ExbaElement {
       navbar.addEventListener('click', (e: Event) => {
         const target = e.target as HTMLElement;
         const closeBtn = target.closest('.tab-close') as HTMLElement | null;
-        if (closeBtn) { e.stopPropagation(); const id = closeBtn.getAttribute('data-close-id'); if (id) this.closeTab(id); return; }
-        if (target.closest('#nav-home')) { this._activeView.value = 'home'; return; }
+        if (closeBtn) {
+          e.stopPropagation();
+          const id = closeBtn.getAttribute('data-close-id');
+          if (id) this.closeTab(id);
+          return;
+        }
+        if (target.closest('#nav-home')) {
+          this._activeView.value = 'home';
+          return;
+        }
         const tabBtn = target.closest('[data-tab-id]') as HTMLElement | null;
-        if (tabBtn) { const id = tabBtn.getAttribute('data-tab-id'); if (id) { this._activeView.value = id; this.renderDetailForTab(id); } }
+        if (tabBtn) {
+          const id = tabBtn.getAttribute('data-tab-id');
+          if (id) {
+            this._activeView.value = id;
+            this.renderDetailForTab(id);
+          }
+        }
       });
     }
   }
@@ -402,14 +455,27 @@ export class WasmDashboard extends ExbaElement {
     const navbar = this.shadowRoot?.querySelector('#navbar');
     if (!navbar) return;
     const homeBtn = `<button class="nav-btn ${activeView === 'home' ? 'active' : ''}" id="nav-home"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Home</button>`;
-    const tabBtns = tabs.map(tab => `<div class="nav-separator"></div><button class="nav-btn ${activeView === tab.id ? 'active' : ''}" data-tab-id="${tab.id}">${tab.iconSvg} ${tab.title}<span class="tab-close" data-close-id="${tab.id}">&times;</span></button>`).join('');
+    const tabBtns = tabs
+      .map(
+        (tab) =>
+          `<div class="nav-separator"></div><button class="nav-btn ${activeView === tab.id ? 'active' : ''}" data-tab-id="${tab.id}">${tab.iconSvg} ${tab.title}<span class="tab-close" data-close-id="${tab.id}">&times;</span></button>`,
+      )
+      .join('');
     navbar.innerHTML = homeBtn + tabBtns;
   }
 
   private openTabFromItem(item: any) {
     const id = item.action_id;
-    if (!this._openTabs.value.find(t => t.id === id)) {
-      this._openTabs.value = [...this._openTabs.value, { id, title: item.title, iconSvg: item.icon_svg, description: item.description }];
+    if (!this._openTabs.value.find((t) => t.id === id)) {
+      this._openTabs.value = [
+        ...this._openTabs.value,
+        {
+          id,
+          title: item.title,
+          iconSvg: item.icon_svg,
+          description: item.description,
+        },
+      ];
     }
     this._activeView.value = id;
     this.renderDetailForTab(id);
@@ -418,24 +484,38 @@ export class WasmDashboard extends ExbaElement {
   private renderDetailForTab(tabId: string) {
     const dv = this.shadowRoot?.querySelector('#detail-view') as HTMLElement;
     if (!dv) return;
-    const tab = this._openTabs.value.find(t => t.id === tabId);
+    const tab = this._openTabs.value.find((t) => t.id === tabId);
     if (!tab) return;
 
     const header = `<div class="detail-header"><div class="detail-icon">${tab.iconSvg}</div><div><div class="detail-title">${tab.title}</div><div class="detail-subtitle">${tab.description}</div></div></div>`;
 
-    if (tabId === 'demo-audio-player') { this.renderAudioPlayerDemo(dv, header); }
-    else if (tabId === 'demo-accordion') { this.renderAccordionDemo(dv, header); }
-    else if (tabId === 'demo-treeview') { this.renderTreeviewDemo(dv, header); }
-    else if (tabId === 'demo-tabs') { this.renderTabManagerDemo(dv, header); }
-    else if (tabId === 'demo-storage') { this.renderStorageDemo(dv, header); }
-    else if (tabId === 'demo-notifications') { this.renderNotificationsDemo(dv, header); }
-    else if (tabId === 'demo-alarms') { this.renderAlarmsDemo(dv, header); }
-    else if (tabId === 'demo-bookmarks') { this.renderBookmarksDemo(dv, header); }
-    else if (tabId === 'demo-history') { this.renderHistoryDemo(dv, header); }
-    else if (tabId === 'demo-cookies') { this.renderCookiesDemo(dv, header); }
-    else if (tabId === 'demo-leaflet') { this.renderLeafletDemo(dv, header); }
-    else if (tabId === 'demo-vis-network') { this.renderVisNetworkDemo(dv, header); }
-    else { dv.innerHTML = `<div class="detail-panel">${header}<div class="demo-section"><p style="color:#94a3b8;font-size:12.5px">${tab.description}</p></div></div>`; }
+    if (tabId === 'demo-audio-player') {
+      this.renderAudioPlayerDemo(dv, header);
+    } else if (tabId === 'demo-accordion') {
+      this.renderAccordionDemo(dv, header);
+    } else if (tabId === 'demo-treeview') {
+      this.renderTreeviewDemo(dv, header);
+    } else if (tabId === 'demo-tabs') {
+      this.renderTabManagerDemo(dv, header);
+    } else if (tabId === 'demo-storage') {
+      this.renderStorageDemo(dv, header);
+    } else if (tabId === 'demo-notifications') {
+      this.renderNotificationsDemo(dv, header);
+    } else if (tabId === 'demo-alarms') {
+      this.renderAlarmsDemo(dv, header);
+    } else if (tabId === 'demo-bookmarks') {
+      this.renderBookmarksDemo(dv, header);
+    } else if (tabId === 'demo-history') {
+      this.renderHistoryDemo(dv, header);
+    } else if (tabId === 'demo-cookies') {
+      this.renderCookiesDemo(dv, header);
+    } else if (tabId === 'demo-leaflet') {
+      this.renderLeafletDemo(dv, header);
+    } else if (tabId === 'demo-vis-network') {
+      this.renderVisNetworkDemo(dv, header);
+    } else {
+      dv.innerHTML = `<div class="detail-panel">${header}<div class="demo-section"><p style="color:#94a3b8;font-size:12.5px">${tab.description}</p></div></div>`;
+    }
   }
 
   /* ══ AUDIO PLAYER ══ */
@@ -509,9 +589,11 @@ export class WasmDashboard extends ExbaElement {
       }
     });
 
-    const uploadInput = this.shadowRoot?.querySelector('#audio-upload') as HTMLInputElement;
+    const uploadInput = this.shadowRoot?.querySelector(
+      '#audio-upload',
+    ) as HTMLInputElement;
     const browseBtn = this.shadowRoot?.querySelector('#btn-browse');
-    
+
     browseBtn?.addEventListener('click', () => uploadInput?.click());
 
     uploadInput?.addEventListener('change', (e: Event) => {
@@ -528,59 +610,155 @@ export class WasmDashboard extends ExbaElement {
   /* ══ ACCORDION ══ */
   private renderAccordionDemo(c: HTMLElement, header: string) {
     const sections = [
-      { title: 'What is WebAssembly?', tag: 'Basics', content: 'WebAssembly (Wasm) is a binary instruction format for a stack-based virtual machine. It enables high-performance applications on the web, allowing code written in Rust, C++, and Go to run at near-native speed.' },
-      { title: 'How does Rust compile to Wasm?', tag: 'Tooling', content: 'Rust compiles to Wasm via the <code>wasm32-unknown-unknown</code> target. Tools like <code>wasm-pack</code> and <code>wasm-bindgen</code> bridge Rust and JavaScript, generating typed bindings automatically.' },
-      { title: 'Browser Extension Architecture', tag: 'Design', content: 'Modern extensions use Manifest V3 with service workers for background logic, content scripts for page injection, and side panels for persistent UI. This project combines all three with a Rust-Wasm core engine.' },
-      { title: 'Signal-based Reactivity', tag: 'Reactive', content: 'This UI uses a custom fine-grained reactivity system inspired by SolidJS. Signals track dependencies automatically, and effects re-run only when their tracked values change — no virtual DOM diffing.' },
+      {
+        title: 'What is WebAssembly?',
+        tag: 'Basics',
+        content:
+          'WebAssembly (Wasm) is a binary instruction format for a stack-based virtual machine. It enables high-performance applications on the web, allowing code written in Rust, C++, and Go to run at near-native speed.',
+      },
+      {
+        title: 'How does Rust compile to Wasm?',
+        tag: 'Tooling',
+        content:
+          'Rust compiles to Wasm via the <code>wasm32-unknown-unknown</code> target. Tools like <code>wasm-pack</code> and <code>wasm-bindgen</code> bridge Rust and JavaScript, generating typed bindings automatically.',
+      },
+      {
+        title: 'Browser Extension Architecture',
+        tag: 'Design',
+        content:
+          'Modern extensions use Manifest V3 with service workers for background logic, content scripts for page injection, and side panels for persistent UI. This project combines all three with a Rust-Wasm core engine.',
+      },
+      {
+        title: 'Signal-based Reactivity',
+        tag: 'Reactive',
+        content:
+          'This UI uses a custom fine-grained reactivity system inspired by SolidJS. Signals track dependencies automatically, and effects re-run only when their tracked values change — no virtual DOM diffing.',
+      },
     ];
-    const chev = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
-    c.innerHTML = `<div class="detail-panel">${header}<div class="accordion" id="accordion-root">${sections.map((s, i) => `
-      <div class="accordion-item"><button class="accordion-header" data-acc="${i}"><span><span class="accordion-tag">${s.tag}</span>${s.title}</span><span class="accordion-chevron">${chev}</span></button><div class="accordion-body" data-acc-body="${i}"><p>${s.content}</p></div></div>`).join('')}</div></div>`;
-    this.shadowRoot?.querySelector('#accordion-root')?.addEventListener('click', (e: Event) => {
-      const h = (e.target as HTMLElement).closest('.accordion-header') as HTMLElement | null;
-      if (!h) return;
-      const idx = h.getAttribute('data-acc');
-      const body = this.shadowRoot?.querySelector(`[data-acc-body="${idx}"]`) as HTMLElement;
-      if (!body) return;
-      const open = h.classList.contains('open');
-      this.shadowRoot?.querySelectorAll('.accordion-header').forEach(x => x.classList.remove('open'));
-      this.shadowRoot?.querySelectorAll('.accordion-body').forEach(x => x.classList.remove('open'));
-      if (!open) { h.classList.add('open'); body.classList.add('open'); }
-    });
+    const chev =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+    c.innerHTML = `<div class="detail-panel">${header}<div class="accordion" id="accordion-root">${sections
+      .map(
+        (s, i) => `
+      <div class="accordion-item"><button class="accordion-header" data-acc="${i}"><span><span class="accordion-tag">${s.tag}</span>${s.title}</span><span class="accordion-chevron">${chev}</span></button><div class="accordion-body" data-acc-body="${i}"><p>${s.content}</p></div></div>`,
+      )
+      .join('')}</div></div>`;
+    this.shadowRoot
+      ?.querySelector('#accordion-root')
+      ?.addEventListener('click', (e: Event) => {
+        const h = (e.target as HTMLElement).closest(
+          '.accordion-header',
+        ) as HTMLElement | null;
+        if (!h) return;
+        const idx = h.getAttribute('data-acc');
+        const body = this.shadowRoot?.querySelector(
+          `[data-acc-body="${idx}"]`,
+        ) as HTMLElement;
+        if (!body) return;
+        const open = h.classList.contains('open');
+        this.shadowRoot
+          ?.querySelectorAll('.accordion-header')
+          .forEach((x) => x.classList.remove('open'));
+        this.shadowRoot
+          ?.querySelectorAll('.accordion-body')
+          .forEach((x) => x.classList.remove('open'));
+        if (!open) {
+          h.classList.add('open');
+          body.classList.add('open');
+        }
+      });
   }
 
   /* ══ TREEVIEW ══ */
   private renderTreeviewDemo(c: HTMLElement, header: string) {
-    const fi = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>';
-    const fli = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>';
-    const ch = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
-    interface TI { name: string; type: 'folder'|'file'; meta?: string; children?: TI[]; }
+    const fi =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>';
+    const fli =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>';
+    const ch =
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
+    interface TI {
+      name: string;
+      type: 'folder' | 'file';
+      meta?: string;
+      children?: TI[];
+    }
     const tree: TI[] = [
-      { name: 'src', type: 'folder', children: [
-        { name: 'components', type: 'folder', children: [{ name: 'wasm-dashboard.ts', type: 'file', meta: '12 KB' }, { name: 'wasm-benchmark.ts', type: 'file', meta: '4.5 KB' }] },
-        { name: 'lib', type: 'folder', children: [{ name: 'framework.ts', type: 'file', meta: '8.9 KB' }, { name: 'reactivity.ts', type: 'file', meta: '3.7 KB' }, { name: 'browser.ts', type: 'file', meta: '1.2 KB' }] },
-        { name: 'sidepanel.ts', type: 'file', meta: '0.8 KB' }, { name: 'background.ts', type: 'file', meta: '3.6 KB' },
-      ]},
-      { name: 'wasm', type: 'folder', children: [{ name: 'src', type: 'folder', children: [{ name: 'lib.rs', type: 'file', meta: '9.8 KB' }] }, { name: 'Cargo.toml', type: 'file', meta: '0.5 KB' }] },
-      { name: 'public', type: 'folder', children: [{ name: 'sidepanel.html', type: 'file', meta: '0.7 KB' }, { name: 'styles.css', type: 'file', meta: '3.8 KB' }] },
-      { name: 'package.json', type: 'file', meta: '1.1 KB' }, { name: 'rsbuild.config.ts', type: 'file', meta: '2.8 KB' },
+      {
+        name: 'src',
+        type: 'folder',
+        children: [
+          {
+            name: 'components',
+            type: 'folder',
+            children: [
+              { name: 'wasm-dashboard.ts', type: 'file', meta: '12 KB' },
+              { name: 'wasm-benchmark.ts', type: 'file', meta: '4.5 KB' },
+            ],
+          },
+          {
+            name: 'lib',
+            type: 'folder',
+            children: [
+              { name: 'framework.ts', type: 'file', meta: '8.9 KB' },
+              { name: 'reactivity.ts', type: 'file', meta: '3.7 KB' },
+              { name: 'browser.ts', type: 'file', meta: '1.2 KB' },
+            ],
+          },
+          { name: 'sidepanel.ts', type: 'file', meta: '0.8 KB' },
+          { name: 'background.ts', type: 'file', meta: '3.6 KB' },
+        ],
+      },
+      {
+        name: 'wasm',
+        type: 'folder',
+        children: [
+          {
+            name: 'src',
+            type: 'folder',
+            children: [{ name: 'lib.rs', type: 'file', meta: '9.8 KB' }],
+          },
+          { name: 'Cargo.toml', type: 'file', meta: '0.5 KB' },
+        ],
+      },
+      {
+        name: 'public',
+        type: 'folder',
+        children: [
+          { name: 'sidepanel.html', type: 'file', meta: '0.7 KB' },
+          { name: 'styles.css', type: 'file', meta: '3.8 KB' },
+        ],
+      },
+      { name: 'package.json', type: 'file', meta: '1.1 KB' },
+      { name: 'rsbuild.config.ts', type: 'file', meta: '2.8 KB' },
     ];
     const rn = (item: TI): string => {
       const isF = item.type === 'folder';
-      return `<div class="tree-node"><div class="tree-row" data-tree-type="${item.type}">${isF ? `<span class="tree-toggle">${ch}</span>` : '<span class="tree-toggle leaf"></span>'}<span class="tree-icon ${isF ? 'folder' : 'file'}">${isF ? fi : fli}</span><span class="tree-label">${item.name}</span>${item.meta ? `<span class="tree-meta">${item.meta}</span>` : ''}</div>${isF && item.children ? `<div class="tree-children">${item.children.map(c => rn(c)).join('')}</div>` : ''}</div>`;
+      return `<div class="tree-node"><div class="tree-row" data-tree-type="${item.type}">${isF ? `<span class="tree-toggle">${ch}</span>` : '<span class="tree-toggle leaf"></span>'}<span class="tree-icon ${isF ? 'folder' : 'file'}">${isF ? fi : fli}</span><span class="tree-label">${item.name}</span>${item.meta ? `<span class="tree-meta">${item.meta}</span>` : ''}</div>${isF && item.children ? `<div class="tree-children">${item.children.map((c) => rn(c)).join('')}</div>` : ''}</div>`;
     };
-    c.innerHTML = `<div class="detail-panel">${header}<div class="treeview" id="treeview-root">${tree.map(i => rn(i)).join('')}</div></div>`;
-    this.shadowRoot?.querySelector('#treeview-root')?.addEventListener('click', (e: Event) => {
-      const row = (e.target as HTMLElement).closest('.tree-row') as HTMLElement | null;
-      if (!row) return;
-      this.shadowRoot?.querySelectorAll('.tree-row.selected').forEach(r => r.classList.remove('selected'));
-      row.classList.add('selected');
-      if (row.getAttribute('data-tree-type') === 'folder') {
-        const ch = row.closest('.tree-node')?.querySelector(':scope > .tree-children') as HTMLElement | null;
-        const tg = row.querySelector('.tree-toggle');
-        if (ch && tg) { ch.classList.toggle('open'); tg.classList.toggle('open'); }
-      }
-    });
+    c.innerHTML = `<div class="detail-panel">${header}<div class="treeview" id="treeview-root">${tree.map((i) => rn(i)).join('')}</div></div>`;
+    this.shadowRoot
+      ?.querySelector('#treeview-root')
+      ?.addEventListener('click', (e: Event) => {
+        const row = (e.target as HTMLElement).closest(
+          '.tree-row',
+        ) as HTMLElement | null;
+        if (!row) return;
+        this.shadowRoot
+          ?.querySelectorAll('.tree-row.selected')
+          .forEach((r) => r.classList.remove('selected'));
+        row.classList.add('selected');
+        if (row.getAttribute('data-tree-type') === 'folder') {
+          const ch = row
+            .closest('.tree-node')
+            ?.querySelector(':scope > .tree-children') as HTMLElement | null;
+          const tg = row.querySelector('.tree-toggle');
+          if (ch && tg) {
+            ch.classList.toggle('open');
+            tg.classList.toggle('open');
+          }
+        }
+      });
   }
 
   /* ══ TAB MANAGER ══ */
@@ -592,18 +770,44 @@ export class WasmDashboard extends ExbaElement {
       if (!list) return;
       try {
         const tabs = await browser.tabs.query({});
-        if (!tabs.length) { list.innerHTML = '<div class="demo-empty">No tabs found</div>'; return; }
-        list.innerHTML = tabs.map((t: any) => `<div class="demo-list-item"><span class="title" title="${t.url || ''}">${t.title || 'Untitled'}</span><span class="meta">#${t.id}</span><button class="demo-btn small danger" data-close-tab="${t.id}" style="padding:3px 8px">✕</button></div>`).join('');
-      } catch { list.innerHTML = '<div class="demo-empty">tabs API not available</div>'; }
+        if (!tabs.length) {
+          list.innerHTML = '<div class="demo-empty">No tabs found</div>';
+          return;
+        }
+        list.innerHTML = tabs
+          .map(
+            (t: any) =>
+              `<div class="demo-list-item"><span class="title" title="${t.url || ''}">${t.title || 'Untitled'}</span><span class="meta">#${t.id}</span><button class="demo-btn small danger" data-close-tab="${t.id}" style="padding:3px 8px">✕</button></div>`,
+          )
+          .join('');
+      } catch {
+        list.innerHTML = '<div class="demo-empty">tabs API not available</div>';
+      }
     };
-    this.shadowRoot?.querySelector('#tabs-refresh')?.addEventListener('click', loadTabs);
-    this.shadowRoot?.querySelector('#tabs-new')?.addEventListener('click', async () => { try { await browser.tabs.create({ url: 'https://example.com' }); setTimeout(loadTabs, 300); } catch {} });
-    this.shadowRoot?.querySelector('#tabs-list')?.addEventListener('click', async (e: Event) => {
-      const btn = (e.target as HTMLElement).closest('[data-close-tab]') as HTMLElement | null;
-      if (!btn) return;
-      const id = Number.parseInt(btn.getAttribute('data-close-tab') || '0');
-      try { await browser.tabs.remove(id); setTimeout(loadTabs, 200); } catch {}
-    });
+    this.shadowRoot
+      ?.querySelector('#tabs-refresh')
+      ?.addEventListener('click', loadTabs);
+    this.shadowRoot
+      ?.querySelector('#tabs-new')
+      ?.addEventListener('click', async () => {
+        try {
+          await browser.tabs.create({ url: 'https://example.com' });
+          setTimeout(loadTabs, 300);
+        } catch {}
+      });
+    this.shadowRoot
+      ?.querySelector('#tabs-list')
+      ?.addEventListener('click', async (e: Event) => {
+        const btn = (e.target as HTMLElement).closest(
+          '[data-close-tab]',
+        ) as HTMLElement | null;
+        if (!btn) return;
+        const id = Number.parseInt(btn.getAttribute('data-close-tab') || '0');
+        try {
+          await browser.tabs.remove(id);
+          setTimeout(loadTabs, 200);
+        } catch {}
+      });
     loadTabs();
   }
 
@@ -615,15 +819,40 @@ export class WasmDashboard extends ExbaElement {
     const load = async () => {
       const res = this.shadowRoot?.querySelector('#stor-result');
       if (!res) return;
-      try { const data = await browser.storage.local.get(null); res.textContent = JSON.stringify(data, null, 2) || '{}'; } catch { res.textContent = 'storage API not available'; }
+      try {
+        const data = await browser.storage.local.get(null);
+        res.textContent = JSON.stringify(data, null, 2) || '{}';
+      } catch {
+        res.textContent = 'storage API not available';
+      }
     };
-    this.shadowRoot?.querySelector('#stor-save')?.addEventListener('click', async () => {
-      const key = (this.shadowRoot?.querySelector('#stor-key') as HTMLInputElement)?.value?.trim();
-      const val = (this.shadowRoot?.querySelector('#stor-val') as HTMLInputElement)?.value;
-      if (key) { try { await browser.storage.local.set({ [key]: val }); load(); } catch {} }
-    });
-    this.shadowRoot?.querySelector('#stor-load')?.addEventListener('click', load);
-    this.shadowRoot?.querySelector('#stor-clear')?.addEventListener('click', async () => { try { await browser.storage.local.clear(); load(); } catch {} });
+    this.shadowRoot
+      ?.querySelector('#stor-save')
+      ?.addEventListener('click', async () => {
+        const key = (
+          this.shadowRoot?.querySelector('#stor-key') as HTMLInputElement
+        )?.value?.trim();
+        const val = (
+          this.shadowRoot?.querySelector('#stor-val') as HTMLInputElement
+        )?.value;
+        if (key) {
+          try {
+            await browser.storage.local.set({ [key]: val });
+            load();
+          } catch {}
+        }
+      });
+    this.shadowRoot
+      ?.querySelector('#stor-load')
+      ?.addEventListener('click', load);
+    this.shadowRoot
+      ?.querySelector('#stor-clear')
+      ?.addEventListener('click', async () => {
+        try {
+          await browser.storage.local.clear();
+          load();
+        } catch {}
+      });
     load();
   }
 
@@ -638,19 +867,40 @@ export class WasmDashboard extends ExbaElement {
         </div>
         <div id="notif-status" style="font-size:11px;color:#64748b;margin-top:8px"></div>
       </div></div>`;
-    this.shadowRoot?.querySelector('#notif-send')?.addEventListener('click', () => {
-      const title = (this.shadowRoot?.querySelector('#notif-title') as HTMLInputElement)?.value || 'EXBA';
-      const msg = (this.shadowRoot?.querySelector('#notif-msg') as HTMLInputElement)?.value || '';
-      const status = this.shadowRoot?.querySelector('#notif-status');
-      try {
-        const chromeObj = (globalThis as any).chrome;
-        if (chromeObj?.notifications?.create) {
-          chromeObj.notifications.create(`exba-${Date.now()}`, { type: 'basic', iconUrl: chromeObj.runtime.getURL('icon-128.png'), title, message: msg }, () => {
-            if (status) status.textContent = `✓ Sent at ${new Date().toLocaleTimeString()}`;
-          });
-        } else { if (status) status.textContent = '✗ notifications API not available'; }
-      } catch { if (status) status.textContent = '✗ Error sending notification'; }
-    });
+    this.shadowRoot
+      ?.querySelector('#notif-send')
+      ?.addEventListener('click', () => {
+        const title =
+          (this.shadowRoot?.querySelector('#notif-title') as HTMLInputElement)
+            ?.value || 'EXBA';
+        const msg =
+          (this.shadowRoot?.querySelector('#notif-msg') as HTMLInputElement)
+            ?.value || '';
+        const status = this.shadowRoot?.querySelector('#notif-status');
+        try {
+          const chromeObj = (globalThis as any).chrome;
+          if (chromeObj?.notifications?.create) {
+            chromeObj.notifications.create(
+              `exba-${Date.now()}`,
+              {
+                type: 'basic',
+                iconUrl: chromeObj.runtime.getURL('icon-128.png'),
+                title,
+                message: msg,
+              },
+              () => {
+                if (status)
+                  status.textContent = `✓ Sent at ${new Date().toLocaleTimeString()}`;
+              },
+            );
+          } else {
+            if (status)
+              status.textContent = '✗ notifications API not available';
+          }
+        } catch {
+          if (status) status.textContent = '✗ Error sending notification';
+        }
+      });
   }
 
   /* ══ ALARMS ══ */
@@ -665,21 +915,56 @@ export class WasmDashboard extends ExbaElement {
       if (!list) return;
       try {
         const alarms = await browser.alarms.getAll();
-        if (!alarms.length) { list.innerHTML = '<div class="demo-empty">No active alarms</div>'; return; }
-        list.innerHTML = alarms.map((a: any) => {
-          const next = a.scheduledTime ? new Date(a.scheduledTime).toLocaleTimeString() : '—';
-          const period = a.periodInMinutes ? `every ${a.periodInMinutes}m` : 'one-shot';
-          return `<div class="demo-list-item"><span class="title">${a.name}</span><span class="meta">${period} · next ${next}</span></div>`;
-        }).join('');
-      } catch { list.innerHTML = '<div class="demo-empty">alarms API not available</div>'; }
+        if (!alarms.length) {
+          list.innerHTML = '<div class="demo-empty">No active alarms</div>';
+          return;
+        }
+        list.innerHTML = alarms
+          .map((a: any) => {
+            const next = a.scheduledTime
+              ? new Date(a.scheduledTime).toLocaleTimeString()
+              : '—';
+            const period = a.periodInMinutes
+              ? `every ${a.periodInMinutes}m`
+              : 'one-shot';
+            return `<div class="demo-list-item"><span class="title">${a.name}</span><span class="meta">${period} · next ${next}</span></div>`;
+          })
+          .join('');
+      } catch {
+        list.innerHTML =
+          '<div class="demo-empty">alarms API not available</div>';
+      }
     };
-    this.shadowRoot?.querySelector('#alarm-create')?.addEventListener('click', async () => {
-      const name = (this.shadowRoot?.querySelector('#alarm-name') as HTMLInputElement)?.value?.trim() || 'alarm';
-      const mins = Number.parseFloat((this.shadowRoot?.querySelector('#alarm-mins') as HTMLInputElement)?.value || '1');
-      try { await browser.alarms.create(name, { delayInMinutes: mins, periodInMinutes: mins }); setTimeout(load, 200); } catch {}
-    });
-    this.shadowRoot?.querySelector('#alarm-refresh')?.addEventListener('click', load);
-    this.shadowRoot?.querySelector('#alarm-clear')?.addEventListener('click', async () => { try { await browser.alarms.clearAll(); setTimeout(load, 200); } catch {} });
+    this.shadowRoot
+      ?.querySelector('#alarm-create')
+      ?.addEventListener('click', async () => {
+        const name =
+          (
+            this.shadowRoot?.querySelector('#alarm-name') as HTMLInputElement
+          )?.value?.trim() || 'alarm';
+        const mins = Number.parseFloat(
+          (this.shadowRoot?.querySelector('#alarm-mins') as HTMLInputElement)
+            ?.value || '1',
+        );
+        try {
+          await browser.alarms.create(name, {
+            delayInMinutes: mins,
+            periodInMinutes: mins,
+          });
+          setTimeout(load, 200);
+        } catch {}
+      });
+    this.shadowRoot
+      ?.querySelector('#alarm-refresh')
+      ?.addEventListener('click', load);
+    this.shadowRoot
+      ?.querySelector('#alarm-clear')
+      ?.addEventListener('click', async () => {
+        try {
+          await browser.alarms.clearAll();
+          setTimeout(load, 200);
+        } catch {}
+      });
     load();
   }
 
@@ -692,19 +977,29 @@ export class WasmDashboard extends ExbaElement {
       try {
         const tree = await browser.bookmarks.getTree();
         const flatten = (nodes: any[], depth = 0): string[] => {
-          let res: string[] = [];
+          const res: string[] = [];
           for (const n of nodes) {
-            res.push(`${'  '.repeat(depth)} ${n.title || 'Untitled'} ${n.children ? '📁' : '📄'}`);
+            res.push(
+              `${'  '.repeat(depth)} ${n.title || 'Untitled'} ${n.children ? '📁' : '📄'}`,
+            );
             if (n.children) res.push(...flatten(n.children, depth + 1));
           }
           return res;
         };
         const lines = flatten(tree);
-        if (!lines.length) { list.innerHTML = '<div class="demo-empty">No bookmarks found</div>'; return; }
+        if (!lines.length) {
+          list.innerHTML = '<div class="demo-empty">No bookmarks found</div>';
+          return;
+        }
         list.innerHTML = `<div class="demo-result" style="white-space:pre; text-align:left">${lines.join('\n')}</div>`;
-      } catch { list.innerHTML = '<div class="demo-empty">bookmarks API not available</div>'; }
+      } catch {
+        list.innerHTML =
+          '<div class="demo-empty">bookmarks API not available</div>';
+      }
     };
-    this.shadowRoot?.querySelector('#book-refresh')?.addEventListener('click', load);
+    this.shadowRoot
+      ?.querySelector('#book-refresh')
+      ?.addEventListener('click', load);
     load();
   }
 
@@ -715,15 +1010,34 @@ export class WasmDashboard extends ExbaElement {
       const list = this.shadowRoot?.querySelector('#hist-list');
       if (!list) return;
       try {
-        const results = await browser.history.search({ text: query, maxResults: 50 });
-        if (!results.length) { list.innerHTML = '<div class="demo-empty">No history entries found</div>'; return; }
-        list.innerHTML = results.map((h: any) => `<div class="demo-list-item"><span class="title" title="${h.url}">${h.title || 'Untitled'}</span><span class="meta">${new Date(h.lastVisitTime).toLocaleDateString()}</span></div>`).join('');
-      } catch { list.innerHTML = '<div class="demo-empty">history API not available</div>'; }
+        const results = await browser.history.search({
+          text: query,
+          maxResults: 50,
+        });
+        if (!results.length) {
+          list.innerHTML =
+            '<div class="demo-empty">No history entries found</div>';
+          return;
+        }
+        list.innerHTML = results
+          .map(
+            (h: any) =>
+              `<div class="demo-list-item"><span class="title" title="${h.url}">${h.title || 'Untitled'}</span><span class="meta">${new Date(h.lastVisitTime).toLocaleDateString()}</span></div>`,
+          )
+          .join('');
+      } catch {
+        list.innerHTML =
+          '<div class="demo-empty">history API not available</div>';
+      }
     };
-    this.shadowRoot?.querySelector('#hist-search-btn')?.addEventListener('click', () => {
-      const query = (this.shadowRoot?.querySelector('#hist-search') as HTMLInputElement)?.value || '';
-      load(query);
-    });
+    this.shadowRoot
+      ?.querySelector('#hist-search-btn')
+      ?.addEventListener('click', () => {
+        const query =
+          (this.shadowRoot?.querySelector('#hist-search') as HTMLInputElement)
+            ?.value || '';
+        load(query);
+      });
     load();
   }
 
@@ -735,11 +1049,24 @@ export class WasmDashboard extends ExbaElement {
       if (!list) return;
       try {
         const cookies = await browser.cookies.getAll({});
-        if (!cookies.length) { list.innerHTML = '<div class="demo-empty">No cookies found</div>'; return; }
-        list.innerHTML = cookies.map((cookie: any) => `<div class="demo-list-item"><span class="title" title="${cookie.value}">${cookie.name}</span><span class="meta">${cookie.domain}</span></div>`).join('');
-      } catch { list.innerHTML = '<div class="demo-empty">cookies API not available</div>'; }
+        if (!cookies.length) {
+          list.innerHTML = '<div class="demo-empty">No cookies found</div>';
+          return;
+        }
+        list.innerHTML = cookies
+          .map(
+            (cookie: any) =>
+              `<div class="demo-list-item"><span class="title" title="${cookie.value}">${cookie.name}</span><span class="meta">${cookie.domain}</span></div>`,
+          )
+          .join('');
+      } catch {
+        list.innerHTML =
+          '<div class="demo-empty">cookies API not available</div>';
+      }
     };
-    this.shadowRoot?.querySelector('#cook-refresh')?.addEventListener('click', load);
+    this.shadowRoot
+      ?.querySelector('#cook-refresh')
+      ?.addEventListener('click', load);
     load();
   }
 
@@ -750,29 +1077,32 @@ export class WasmDashboard extends ExbaElement {
         <div id="map" style="height: 300px; width: 100%; border-radius: 8px; background: #1e293b; display: block; position: relative; z-index: 1;"></div>
       </div>
     </div>`;
-    
+
     setTimeout(() => {
       const mapEl = this.shadowRoot?.querySelector('#map');
       if (!mapEl) return;
-      
+
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconRetinaUrl:
+          'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
         iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        shadowUrl:
+          'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       });
 
       try {
         const map = L.map(mapEl, {
           preferCanvas: true,
-          zoomControl: true
+          zoomControl: true,
         }).setView([51.505, -0.09], 13);
-        
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors'
+          attribution: '© OpenStreetMap contributors',
         }).addTo(map);
-        
-        L.marker([51.505, -0.09]).addTo(map)
+
+        L.marker([51.505, -0.09])
+          .addTo(map)
           .bindPopup('A Leaflet marker in EXBA!')
           .openPopup();
 
@@ -782,7 +1112,6 @@ export class WasmDashboard extends ExbaElement {
           map.invalidateSize();
         });
         ro.observe(mapEl);
-
       } catch (e) {
         console.error('Leaflet init error:', e);
       }
@@ -802,7 +1131,12 @@ export class WasmDashboard extends ExbaElement {
       if (!netEl) return;
 
       const nodes = new DataSet([
-        { id: 1, label: 'EXBA Core', color: '#6366f1', font: { color: 'white' } },
+        {
+          id: 1,
+          label: 'EXBA Core',
+          color: '#6366f1',
+          font: { color: 'white' },
+        },
         { id: 2, label: 'Rust WASM', color: '#f97316' },
         { id: 3, label: 'TS Framework', color: '#3b82f6' },
         { id: 4, label: 'Browser APIs', color: '#10b981' },
@@ -812,25 +1146,41 @@ export class WasmDashboard extends ExbaElement {
       ]);
 
       const edges = new DataSet([
-        { from: 1, to: 2 }, { from: 1, to: 3 }, { from: 1, to: 4 }, { from: 1, to: 5 },
-        { from: 3, to: 6 }, { from: 3, to: 7 },
+        { from: 1, to: 2 },
+        { from: 1, to: 3 },
+        { from: 1, to: 4 },
+        { from: 1, to: 5 },
+        { from: 3, to: 6 },
+        { from: 3, to: 7 },
       ]);
 
-      new Network(netEl, { nodes, edges }, {
-        nodes: { shape: 'dot', size: 16, font: { size: 12, color: '#f8fafc' } },
-        edges: { color: '#475569', width: 2 },
-        physics: { enabled: true, stabilization: true },
-      });
+      new Network(
+        netEl,
+        { nodes, edges },
+        {
+          nodes: {
+            shape: 'dot',
+            size: 16,
+            font: { size: 12, color: '#f8fafc' },
+          },
+          edges: { color: '#475569', width: 2 },
+          physics: { enabled: true, stabilization: true },
+        },
+      );
     }, 100);
   }
 
-
   private closeTab(tabId: string) {
-    const tabs = this._openTabs.value.filter(t => t.id !== tabId);
+    const tabs = this._openTabs.value.filter((t) => t.id !== tabId);
     this._openTabs.value = tabs;
     if (this._activeView.value === tabId) {
-      if (tabs.length > 0) { const last = tabs[tabs.length - 1]; this._activeView.value = last.id; this.renderDetailForTab(last.id); }
-      else { this._activeView.value = 'home'; }
+      if (tabs.length > 0) {
+        const last = tabs[tabs.length - 1];
+        this._activeView.value = last.id;
+        this.renderDetailForTab(last.id);
+      } else {
+        this._activeView.value = 'home';
+      }
     }
   }
 }

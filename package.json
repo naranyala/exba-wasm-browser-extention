@@ -17,6 +17,11 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:wasm": "cd wasm && wasm-pack test --node",
+    "wasm:build": "cd wasm && wasm-pack build --target web",
+    "wasm:check": "./wasm/scripts/check.sh",
+    "wasm:module": "./wasm/scripts/scaffold-module.sh",
+    "wasm:types": "npx tsx scripts/gen-wasm-types.ts",
+    "wasm:full": "npm run wasm:build && npm run wasm:types",
     "longlines": "./scripts/long-lines.sh"
   },
   "repository": {

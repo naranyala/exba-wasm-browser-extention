@@ -106,9 +106,22 @@
         ></div>
       </div>
 
+      <!-- WASM Module Manifest Card -->
+      <div class="card-section" id="modules-section">
+        <div class="card-title">2. Registered WASM Modules</div>
+        <div class="form-group">
+          <div class="input-row">
+            <button id="btn-refresh-modules">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="module-list" style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+          <div style="color: var(--text-secondary); font-size: 12px;">Loading modules...</div>
+        </div>
+      </div>
+
       <!-- WASM Benchmark Card -->
       <div class="card-section">
-        <div class="card-title">2. Fibonacci Benchmark Speed Test</div>
+        <div class="card-title">3. Fibonacci Benchmark Speed Test</div>
         <div class="form-group">
           <label for="benchmark-n">Fibonacci (n = )</label>
           <div class="input-row">

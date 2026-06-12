@@ -1,6 +1,10 @@
-// @ts-ignore
-if (typeof globalThis.chrome === 'undefined' || !(globalThis as any).chrome.runtime || !(globalThis as any).chrome.runtime.id) {
-  // @ts-ignore
+// @ts-expect-error
+if (
+  typeof globalThis.chrome === 'undefined' ||
+  !(globalThis as any).chrome.runtime ||
+  !(globalThis as any).chrome.runtime.id
+) {
+  // @ts-expect-error
   (globalThis as any).chrome = {
     runtime: {
       id: 'build-mock',

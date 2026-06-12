@@ -5,15 +5,15 @@
 // Simple escape to prevent basic XSS
 export function escapeHTML(str: string) {
   return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 // Reusable spinner component
-export const createSpinner = (text: string = "Loading...") => `
+export const createSpinner = (text: string = 'Loading...') => `
   <div class="spinner-container" style="text-align: center; padding: 20px; color: #94a3b8;">
     <div class="spinner" style="border: 2px solid #334155; border-top: 2px solid #6366f1; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
     <div style="font-size: 12px;">${escapeHTML(text)}</div>

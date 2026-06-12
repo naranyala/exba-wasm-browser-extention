@@ -6,10 +6,12 @@ import browser from './lib/browser';
   if (typeof chrome !== 'undefined' && chrome.runtime) {
     try {
       const currentWindow = await browser.windows.getCurrent();
-      
+
       const connectToBackground = () => {
         try {
-          const port = browser.runtime.connect({ name: `sidepanel-${currentWindow.id}` });
+          const port = browser.runtime.connect({
+            name: `sidepanel-${currentWindow.id}`,
+          });
           port.onDisconnect.addListener(() => {
             // Reconnect if the side panel is still open
             setTimeout(connectToBackground, 1000);
@@ -21,7 +23,7 @@ import browser from './lib/browser';
       };
 
       connectToBackground();
-      
+
       // Listen for programmatic close signals
       browser.runtime.onMessage.addListener(async (message) => {
         if (message.action === 'close_side_panel') {

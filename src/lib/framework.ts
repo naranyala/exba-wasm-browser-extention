@@ -1,14 +1,37 @@
+import type { WasmModuleManifest } from '../wasm-types';
+import {
+  type ContextKey,
+  createContext,
+  provideContext,
+  useContext,
+} from './context';
 import {
   batch,
   computed,
+  createStore,
   effect,
   type Signal,
   signal,
+  untrack,
   watch,
 } from './reactivity';
+import {
+  createBindValue,
+  createClassList,
+  createFor,
+  createRef,
+  createShow,
+  type ForProps,
+  html,
+  type Ref,
+  type ShowProps,
+} from './render';
+import { getWasmModuleManifests, validateState } from './wasm-bridge';
+import type { WasmClientOptions } from './wasm-client';
+import { WasmClient } from './wasm-client';
 
 /**
- * Interface for the Rust WASM engine.
+ * Interface for the Rust WASM engine (backward compat).
  */
 export interface Engine<TState = any> {
   get_state_json(): string;
@@ -16,7 +39,12 @@ export interface Engine<TState = any> {
   [key: string]: any;
 }
 
-export type InitWasmFn = () => Promise<void>;
+export type { ContextKey } from './context';
+export { createContext, provideContext, useContext } from './context';
+export { createStore, untrack } from './reactivity';
+export type { Ref } from './render';
+export { createRef, html } from './render';
+export type InitWasmFn = (config?: { module_or_path: string }) => Promise<void>;
 export type EngineConstructor<TState = any> = new (
   ...args: any[]
 ) => Engine<TState>;
@@ -44,15 +72,18 @@ export class ExbaElement<
   protected initialArgs: any[];
   protected engine: Engine<TState> | null = null;
 
+  /** WasmClient — typed reactive wrapper around CoreEngine */
+  public wasm: WasmClient | null = null;
+
   // The core reactive signal holding our synchronized Rust state
   public state: Signal<TState>;
 
   protected _disposables: Set<() => void> = new Set();
 
   /**
-   * @param {InitWasmFn} initWasmFn - The default initialization function exported by wasm-bindgen
-   * @param {EngineConstructor} EngineClass - The Rust WASM engine class (e.g. CoreEngine)
-   * @param {Array} initialArgs - Arguments to pass to the engine constructor
+   * @param initWasmFn - The default initialization function exported by wasm-bindgen
+   * @param EngineClass - The Rust WASM engine class (e.g. CoreEngine)
+   * @param initialArgs - Arguments to pass to the engine constructor
    */
   constructor(
     initWasmFn: InitWasmFn,
@@ -82,6 +113,10 @@ export class ExbaElement<
       dispose();
     }
     this._disposables.clear();
+    if (this.wasm) {
+      this.wasm.dispose();
+      this.wasm = null;
+    }
     this.onUnmounted();
   }
 
@@ -98,19 +133,30 @@ export class ExbaElement<
   onMounted() {}
   onUnmounted() {}
 
+  // ══════════════════════════════════════════════════════════
+  //  Reactive primitives
+  // ══════════════════════════════════════════════════════════
+
   /**
-   * High-level reactive primitives for subclasses
+   * Create a derived reactive value.
    */
   computed<T>(fn: () => T) {
     return computed(fn);
   }
 
+  /**
+   * Create a reactive side-effect that tracks signal dependencies.
+   * The returned dispose function is automatically called on unmount.
+   */
   effect(fn: () => void) {
     const stop = effect(fn);
     this._disposables.add(stop);
     return stop;
   }
 
+  /**
+   * Watch a signal for changes.
+   */
   watch<T>(
     source: () => T,
     cb: (val: T, oldVal: T) => void,
@@ -119,6 +165,65 @@ export class ExbaElement<
     const stop = watch(source, cb, options);
     this._disposables.add(stop);
     return stop;
+  }
+
+  /**
+   * Execute a function without tracking signal dependencies.
+   */
+  untrack<T>(fn: () => T): T {
+    return untrack(fn);
+  }
+
+  /**
+   * Create a deep reactive store with path-level tracking.
+   * Each property access inside an effect is individually tracked.
+   *
+   * @example
+   * ```ts
+   * const store = this.createStore({ count: 0, name: 'hello' });
+   * effect(() => { console.log(store.count); }); // only tracks 'count'
+   * store.count = 5; // triggers only effects reading store.count
+   * ```
+   */
+  createStore<T extends Record<string, unknown>>(initial: T): T {
+    return createStore(initial);
+  }
+
+  /**
+   * Create a mutable ref container for capturing DOM elements.
+   * Not reactive — reading ref.current does not create tracking.
+   */
+  createRef<T extends Element = HTMLElement>(initial: T | null = null): Ref<T> {
+    return createRef(initial);
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  Context API
+  // ══════════════════════════════════════════════════════════
+
+  /**
+   * Provide a context value to descendant components.
+   * Returns a dispose function. The value is available to any
+   * `useContext` call in effects down the tree.
+   *
+   * @example
+   * ```ts
+   * this.effect(() => {
+   *   const dispose = this.provideContext(ThemeCtx, { mode: 'dark' });
+   *   this._disposables.add(dispose);
+   * });
+   * ```
+   */
+  provideContext<T>(key: ContextKey<T>, value: T): () => void {
+    return provideContext(key, value);
+  }
+
+  /**
+   * Read a context value provided by an ancestor component.
+   * Returns the default value if no provider is found.
+   */
+  useContext<T>(key: ContextKey<T>): T {
+    return useContext(key);
   }
 
   /**
@@ -190,6 +295,142 @@ export class ExbaElement<
     }
   }
 
+  // ══════════════════════════════════════════════════════════
+  //  Advanced rendering primitives
+  // ══════════════════════════════════════════════════════════
+
+  /**
+   * Conditionally mount/unmount DOM content based on a signal.
+   * Manages lifecycle — creates DOM when truthy, removes when falsy.
+   *
+   * @example
+   * ```ts
+   * this.show({
+   *   mount: this.$('#detail'),
+   *   when: () => this.state.value.hasSelection,
+   *   children: () => html`<p>Selected: ${this.state.value.selection}</p>`,
+   * });
+   * ```
+   */
+  show<T>(
+    props: Omit<ShowProps<T>, 'mount'> & {
+      mount?: string | Element | ShadowRoot;
+    },
+  ): () => void {
+    const mountEl = this.resolveMount(props.mount);
+    if (!mountEl) return () => {};
+    return createShow({ ...props, mount: mountEl });
+  }
+
+  /**
+   * Keyed list rendering with DOM reuse.
+   * Only creates/removes nodes for items that change.
+   *
+   * @example
+   * ```ts
+   * this.for({
+   *   mount: '#todo-list',
+   *   each: () => this.state.value.todos,
+   *   keyed: (t) => t.id,
+   *   children: (t, i) => html`<li>${i()} - ${t.text}</li>`,
+   * });
+   * ```
+   */
+  for<T>(
+    props: Omit<ForProps<T>, 'mount'> & {
+      mount?: string | Element | ShadowRoot;
+    },
+  ): () => void {
+    const mountEl = this.resolveMount(props.mount);
+    if (!mountEl) return () => {};
+    return createFor({ ...props, mount: mountEl });
+  }
+
+  /**
+   * Two-way reactive binding between an input and a signal.
+   *
+   * @example
+   * ```ts
+   * this.bindValue('#search', () => state.value.query, (val) => {
+   *   state.value = { ...state.value, query: val };
+   * });
+   * ```
+   */
+  bindValue(
+    selector: string,
+    get: () => string,
+    set: (value: string) => void,
+  ): () => void {
+    const el = this.$(selector) as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | HTMLSelectElement
+      | null;
+    if (!el) return () => {};
+    return createBindValue(el, get, set);
+  }
+
+  /**
+   * Reactively toggle CSS classes on an element.
+   *
+   * @example
+   * ```ts
+   * this.toggleClass('#panel', {
+   *   active: () => state.value.open,
+   *   'has-error': () => state.value.error !== null,
+   * });
+   * ```
+   */
+  toggleClass(
+    selector: string,
+    classes: Record<string, () => boolean>,
+  ): () => void {
+    const el = this.$(selector);
+    if (!el) return () => {};
+    return createClassList(el, classes);
+  }
+
+  /**
+   * Query a single element in the shadow root.
+   */
+  $(selector: string): HTMLElement | null {
+    return this.shadowRoot?.querySelector(selector) ?? null;
+  }
+
+  /**
+   * Query all matching elements in the shadow root.
+   */
+  $$(selector: string): NodeListOf<HTMLElement> {
+    return this.shadowRoot?.querySelectorAll(selector) ?? ([] as any);
+  }
+
+  private resolveMount(
+    mount?: string | Element | ShadowRoot,
+  ): Element | ShadowRoot | null {
+    if (!mount) return this.shadowRoot ?? null;
+    if (typeof mount === 'string') return this.$(mount);
+    return mount;
+  }
+
+  /**
+   * Get registered module manifests from the Rust engine.
+   * Returns empty array if engine is not initialized or doesn't have the method.
+   */
+  getModuleManifests(): WasmModuleManifest[] {
+    const fn = (this.engine as any)?.get_module_manifests_json;
+    if (typeof fn === 'function') {
+      return getWasmModuleManifests(() => fn.call(this.engine));
+    }
+    return [];
+  }
+
+  /**
+   * Validate current state against expected keys (for development).
+   */
+  validateState(expectedKeys: string[]): string[] {
+    return validateState(this.state.value as any, expectedKeys);
+  }
+
   /**
    * Helper to handle events and automatically sync state to Rust.
    */
@@ -233,18 +474,22 @@ export class ExbaElement<
   async init() {
     try {
       if (!this.engine) {
-        // 1. Initialize WASM module with absolute extension URL
-        const chromeObj = (globalThis as any).chrome;
-        const wasmUrl = chromeObj?.runtime?.getURL
-          ? chromeObj.runtime.getURL('wasm/pkg/wasm_unified_core_bg.wasm')
-          : 'wasm/pkg/wasm_unified_core_bg.wasm';
+        // Create WasmClient — handles init, engine creation, state sync, events
+        const wasmOptions: WasmClientOptions = {
+          autoSync: false,
+          debug: false,
+        };
+        this.wasm = new WasmClient(
+          this.initWasmFn,
+          this.EngineClass as any,
+          this.getEngineArgs(),
+          wasmOptions,
+        );
 
-        await (this.initWasmFn as any)({ module_or_path: wasmUrl });
+        await this.wasm.waitReady();
+        this.engine = this.wasm.engine;
 
-        // 2. Instantiate Rust Core Engine
-        this.engine = new this.EngineClass(...this.getEngineArgs());
-
-        // 3. Populate initial state from Rust
+        // Sync initial state from Rust
         this.syncStateFromRust();
       }
 
@@ -264,10 +509,11 @@ export class ExbaElement<
   // Pulls the serialized state from Rust and updates the Signal
   syncStateFromRust() {
     if (!this.engine) return;
-    const jsonStr = this.engine.get_state_json();
+    if (this.wasm) {
+      this.wasm.pullState();
+    }
     try {
-      const newState = JSON.parse(jsonStr);
-      // Updating .value triggers all subscribed effects
+      const newState = JSON.parse(this.engine.get_state_json());
       this.state.value = newState;
     } catch (e) {
       console.error('[WasmElement] Error parsing Rust state JSON:', e);

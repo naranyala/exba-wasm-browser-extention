@@ -1,5 +1,5 @@
-import { ExbaElement, defineExba } from '../lib/framework';
 import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
+import { defineExba, ExbaElement } from '../lib/framework';
 
 export class WasmBenchmark extends ExbaElement {
   constructor() {
@@ -34,8 +34,9 @@ export class WasmBenchmark extends ExbaElement {
 
   // 2. Reactive Bindings
   setupEffects() {
-    this.bindText('.bench-box', (s) => 
-        `Last calculated: fib(${s.count}) = ${s.fib_val}`
+    this.bindText(
+      '.bench-box',
+      (s) => `Last calculated: fib(${s.count}) = ${s.fib_val}`,
     );
   }
 
