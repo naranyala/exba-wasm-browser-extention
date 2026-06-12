@@ -173,6 +173,7 @@ export default defineConfig({
       { from: './public/options.html', to: 'options.html' },
       { from: './public/sidepanel.html', to: 'sidepanel.html' },
       { from: './public/offscreen.html', to: 'offscreen.html' },
+      { from: './node_modules/sql.js/dist/sql-wasm.wasm', to: 'sql-wasm.wasm' },
     ],
   },
   tools: {

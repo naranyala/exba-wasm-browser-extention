@@ -22,7 +22,8 @@
     "wasm:module": "./wasm/scripts/scaffold-module.sh",
     "wasm:types": "npx tsx scripts/gen-wasm-types.ts",
     "wasm:full": "npm run wasm:build && npm run wasm:types",
-    "longlines": "./scripts/long-lines.sh"
+    "longlines": "./scripts/long-lines.sh",
+    "launch": "bash ./run-browser.sh"
   },
   "repository": {
     "type": "git",
@@ -40,8 +41,10 @@
     "@rsbuild/core": "^2.0.11",
     "@types/chrome": "^0.1.43",
     "@types/leaflet": "^1.9.21",
+    "@types/sql.js": "^1.4.11",
     "@types/webextension-polyfill": "^0.12.5",
     "@vitest/browser": "^4.1.8",
+    "@vitest/coverage-v8": "4.1.8",
     "chrome-types": "0.1.335",
     "esbuild": "^0.28.0",
     "jsdom": "^29.1.1",
@@ -56,6 +59,7 @@
     "iconoir": "^7.11.0",
     "leaflet": "^1.9.4",
     "lucide-static": "^1.17.0",
+    "sql.js": "^1.14.1",
     "vis-data": "^8.0.4",
     "vis-network": "^10.1.0",
     "wavesurfer.js": "^7.12.7",

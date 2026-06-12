@@ -89,7 +89,7 @@ static ALL_ITEMS: LazyLock<Vec<MenuItem>> = LazyLock::new(|| vec![
     MenuItem {
         title: "Audio Visualizer".to_string(),
         description: "Audio player with real-time Web Audio waveform visualization.".to_string(),
-        tag: "Component Integration".to_string(),
+        tag: "Mini Apps Lab".to_string(),
         tag_class: "tag-int".to_string(),
         icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>"#.to_string(),
         action_id: "demo-audio-player".to_string(),
@@ -109,6 +109,22 @@ static ALL_ITEMS: LazyLock<Vec<MenuItem>> = LazyLock::new(|| vec![
         tag_class: "tag-int".to_string(),
         icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 18l12-12"/></svg>"#.to_string(),
         action_id: "demo-vis-network".to_string(),
+    },
+    MenuItem {
+        title: "SQLite Studio".to_string(),
+        description: "Import SQLite databases and run SQL queries in the browser.".to_string(),
+        tag: "Mini Apps Lab".to_string(),
+        tag_class: "tag-int".to_string(),
+        icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><path d="M9 21V9"/></svg>"#.to_string(),
+        action_id: "demo-sqlite".to_string(),
+    },
+    MenuItem {
+        title: "Tabs JSON Manager".to_string(),
+        description: "Export current tabs as JSON and restore tabs from JSON payload.".to_string(),
+        tag: "Mini Apps Lab".to_string(),
+        tag_class: "tag-int".to_string(),
+        icon_svg: r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>"#.to_string(),
+        action_id: "demo-tabs-json".to_string(),
     },
 ]);
 
@@ -189,6 +205,6 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_menu_get_all_items() {
         let items = get_all_items();
-        assert_eq!(items.len(), 12);
+        assert_eq!(items.len(), 14);
     }
 }

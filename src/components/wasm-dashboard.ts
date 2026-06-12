@@ -2,6 +2,7 @@ import L from 'leaflet';
 import { DataSet } from 'vis-data';
 import { Network } from 'vis-network';
 import WaveSurfer from 'wavesurfer.js';
+import initSqlJs, { type Database } from 'sql.js';
 import init, { CoreEngine } from '../../wasm/pkg/wasm_unified_core';
 import browser, { chrome } from '../lib/browser';
 import { defineExba, ExbaElement, html } from '../lib/framework';
@@ -267,7 +268,7 @@ export class WasmDashboard extends ExbaElement {
           <div id="search-status"></div>
           <div class="home-scroll" id="categorized-grid"></div>
         </div>
-        <div id="detail-view" style="display: none;"></div>
+        <div id="detail-view" class="detail-view-hidden"></div>
       </div>
     `;
   }
@@ -289,10 +290,11 @@ export class WasmDashboard extends ExbaElement {
       mount: '#categorized-grid',
       each: () => {
         const items = this.state.value.filtered_items || [];
+        const order = ['Mini Apps Lab', 'Component Integration', 'Component Examples', 'Browser API'];
         const sorted = [...items].sort((a, b) => {
-          if (a.tag === 'Component Integration') return -1;
-          if (b.tag === 'Component Integration') return 1;
-          return 0;
+          const idxA = order.indexOf(a.tag || 'Other');
+          const idxB = order.indexOf(b.tag || 'Other');
+          return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
         });
         // Convert flat items into category groups
         const groups: Record<string, any[]> = {};
@@ -305,7 +307,7 @@ export class WasmDashboard extends ExbaElement {
           id: `cat-${cat.replace(/\s+/g, '-')}`,
           category: cat,
           items: catItems,
-          isOpen: cat === 'Component Integration',
+          isOpen: cat === 'Mini Apps Lab' || cat === 'Component Integration',
         }));
       },
       keyed: (g) => g.id,
@@ -513,6 +515,10 @@ export class WasmDashboard extends ExbaElement {
       this.renderLeafletDemo(dv, header);
     } else if (tabId === 'demo-vis-network') {
       this.renderVisNetworkDemo(dv, header);
+    } else if (tabId === 'demo-sqlite') {
+      this.renderSqliteDemo(dv, header);
+    } else if (tabId === 'demo-tabs-json') {
+      this.renderTabsJsonDemo(dv, header);
     } else {
       dv.innerHTML = `<div class="detail-panel">${header}<div class="demo-section"><p style="color:#94a3b8;font-size:12.5px">${tab.description}</p></div></div>`;
     }
@@ -1182,6 +1188,255 @@ export class WasmDashboard extends ExbaElement {
         this._activeView.value = 'home';
       }
     }
+  }
+  /* ══ SQLITE DEMO ══ */
+  private renderSqliteDemo(c: HTMLElement, header: string) {
+    c.innerHTML = `<div class="detail-panel">${header}
+      <div class="demo-section">
+        <div class="demo-label">SQLite Database Studio</div>
+        <div class="demo-row" style="margin-bottom: 12px; justify-content: space-between;">
+          <input type="file" id="sqlite-upload" accept=".sqlite,.db,.sqlite3" style="display: none;">
+          <button class="demo-btn" id="btn-sqlite-import">Import DB</button>
+          <button class="demo-btn secondary" id="btn-sqlite-export" style="display: none;">Export DB</button>
+        </div>
+        <div id="sqlite-status" style="font-size: 11px; color: #64748b; margin-bottom: 12px;">No database loaded. Create a new one or import an existing file.</div>
+        
+        <div id="sqlite-workspace" style="display: flex; flex-direction: column; gap: 12px;">
+          <textarea id="sqlite-query" class="demo-input" style="height: 60px; resize: vertical; font-family: monospace;" placeholder="SELECT name FROM sqlite_master WHERE type='table';"></textarea>
+          <div class="demo-row">
+            <button class="demo-btn success" id="btn-sqlite-run">Run Query</button>
+            <button class="demo-btn secondary" id="btn-sqlite-schema">View Schema</button>
+            <button class="demo-btn secondary" id="btn-sqlite-history">History</button>
+          </div>
+          <div id="sqlite-results" class="demo-result" style="max-height: 300px; overflow: auto; background: rgba(15,23,42,0.6);"></div>
+        </div>
+      </div>
+    </div>`;
+
+    const uploadInput = this.shadowRoot?.querySelector('#sqlite-upload') as HTMLInputElement;
+    const btnImport = this.shadowRoot?.querySelector('#btn-sqlite-import');
+    const btnExport = this.shadowRoot?.querySelector('#btn-sqlite-export') as HTMLElement;
+    const statusEl = this.shadowRoot?.querySelector('#sqlite-status');
+    const workspace = this.shadowRoot?.querySelector('#sqlite-workspace') as HTMLElement;
+    const queryInput = this.shadowRoot?.querySelector('#sqlite-query') as HTMLTextAreaElement;
+    const btnRun = this.shadowRoot?.querySelector('#btn-sqlite-run');
+    const btnSchema = this.shadowRoot?.querySelector('#btn-sqlite-schema');
+    const btnHistory = this.shadowRoot?.querySelector('#btn-sqlite-history');
+    const resultsContainer = this.shadowRoot?.querySelector('#sqlite-results') as HTMLElement;
+
+    let db: Database | null = null;
+    const queryHistory: string[] = [];
+    const chromeObj = (globalThis as any).chrome;
+    const locateFile = (file: string) => chromeObj?.runtime?.getURL?.(file) || file;
+
+    const renderTable = (result: any[]) => {
+      if (!result || result.length === 0) {
+        resultsContainer.innerHTML = '<span style="color: #64748b;">No results to display or query executed successfully.</span>';
+        return;
+      }
+      
+      let html = '';
+      for (const res of result) {
+        html += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 11px; text-align: left;">';
+        html += '<thead><tr style="background: rgba(255,255,255,0.05);">';
+        for (const col of res.columns) {
+          html += `<th style="padding: 6px; border: 1px solid rgba(255,255,255,0.1);">${col}</th>`;
+        }
+        html += '</tr></thead><tbody>';
+        for (const row of res.values) {
+          html += '<tr>';
+          for (const val of row) {
+            html += `<td style="padding: 6px; border: 1px solid rgba(255,255,255,0.1);">${val !== null ? String(val).replace(/</g, '&lt;') : '<i style="color:#64748b">NULL</i>'}</td>`;
+          }
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+      }
+      resultsContainer.innerHTML = html;
+    };
+
+    const initDb = async (buffer?: ArrayBuffer) => {
+      if (statusEl) statusEl.textContent = 'Loading SQLite engine...';
+      try {
+        const SQL = await initSqlJs({ locateFile });
+        if (db) db.close();
+        if (buffer) {
+          db = new SQL.Database(new Uint8Array(buffer));
+          if (statusEl) statusEl.textContent = `Loaded database (${(buffer.byteLength / 1024).toFixed(1)} KB)`;
+        } else {
+          db = new SQL.Database();
+          if (statusEl) statusEl.textContent = 'Created new in-memory database';
+        }
+        btnExport.style.display = 'block';
+        
+        // Show initial tables
+        const res = db.exec("SELECT name FROM sqlite_master WHERE type='table';");
+        renderTable(res);
+      } catch (err: any) {
+        if (statusEl) statusEl.textContent = 'Error loading DB: ' + err.message;
+      }
+    };
+
+    // Initialize an empty database on first open
+    initDb();
+
+    btnImport?.addEventListener('click', () => uploadInput?.click());
+
+    uploadInput?.addEventListener('change', async (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const buffer = await file.arrayBuffer();
+      await initDb(buffer);
+    });
+
+    btnRun?.addEventListener('click', () => {
+      if (!db) return;
+      const sql = queryInput?.value;
+      if (!sql) return;
+      
+      try {
+        if (!queryHistory.includes(sql)) {
+          queryHistory.unshift(sql);
+          if (queryHistory.length > 20) queryHistory.pop();
+        }
+        const res = db.exec(sql);
+        renderTable(res);
+      } catch (err: any) {
+        resultsContainer.innerHTML = `<span style="color: #ef4444;">Error: ${err.message}</span>`;
+      }
+    });
+
+    btnSchema?.addEventListener('click', () => {
+      if (!db) return;
+      try {
+        const res = db.exec("SELECT type, name, sql FROM sqlite_master WHERE sql NOT NULL ORDER BY name;");
+        renderTable(res);
+      } catch (err: any) {
+        resultsContainer.innerHTML = `<span style="color: #ef4444;">Error: ${err.message}</span>`;
+      }
+    });
+
+    btnHistory?.addEventListener('click', () => {
+      if (queryHistory.length === 0) {
+        resultsContainer.innerHTML = '<span style="color: #64748b;">No query history yet.</span>';
+        return;
+      }
+      let html = '<div style="font-weight: 600; color: #cbd5e1; margin-bottom: 8px;">Query History:</div><div style="display: flex; flex-direction: column; gap: 4px;">';
+      queryHistory.forEach((q) => {
+        html += `<div class="demo-list-item" style="cursor: pointer;">${q.replace(/</g, '&lt;')}</div>`;
+      });
+      html += '</div>';
+      resultsContainer.innerHTML = html;
+      
+      // Add event listeners to history items so they populate the query box
+      const items = resultsContainer.querySelectorAll('.demo-list-item');
+      items.forEach(item => {
+        item.addEventListener('click', () => {
+          if (queryInput) queryInput.value = item.textContent || '';
+        });
+      });
+    });
+
+    btnExport?.addEventListener('click', () => {
+      if (!db) return;
+      const data = db.export();
+      const blob = new Blob([data], { type: 'application/x-sqlite3' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'exported_database.sqlite';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  /* ══ TABS JSON MANAGER ══ */
+  private renderTabsJsonDemo(c: HTMLElement, header: string) {
+    c.innerHTML = `<div class="detail-panel">${header}
+      <div class="demo-section">
+        <div class="demo-label">Export / Import Chrome Tabs</div>
+        <div class="demo-row" style="margin-bottom: 12px; justify-content: space-between;">
+          <button class="demo-btn" id="btn-tabs-export">Export Open Tabs</button>
+          <button class="demo-btn secondary" id="btn-tabs-download" style="display: none;">Download JSON</button>
+        </div>
+        <div id="tabs-status" style="font-size: 11px; color: #64748b; margin-bottom: 12px;">Click export to fetch current tabs, or paste JSON below to restore.</div>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <textarea id="tabs-json-payload" class="demo-input" style="height: 180px; resize: vertical; font-family: monospace;" placeholder='[\n  {\n    "url": "https://google.com"\n  }\n]'></textarea>
+          <div class="demo-row">
+            <button class="demo-btn success" id="btn-tabs-import">Restore Tabs from JSON</button>
+          </div>
+          <div id="tabs-results" class="demo-result" style="max-height: 150px; overflow: auto; background: rgba(15,23,42,0.6);"></div>
+        </div>
+      </div>
+    </div>`;
+
+    const btnExport = this.shadowRoot?.querySelector('#btn-tabs-export');
+    const btnDownload = this.shadowRoot?.querySelector('#btn-tabs-download') as HTMLElement;
+    const btnImport = this.shadowRoot?.querySelector('#btn-tabs-import');
+    const jsonPayload = this.shadowRoot?.querySelector('#tabs-json-payload') as HTMLTextAreaElement;
+    const statusEl = this.shadowRoot?.querySelector('#tabs-status');
+    const resultsContainer = this.shadowRoot?.querySelector('#tabs-results') as HTMLElement;
+
+    const chromeObj = (globalThis as any).chrome;
+
+    btnExport?.addEventListener('click', async () => {
+      if (!chromeObj?.tabs?.query) {
+        if (statusEl) statusEl.textContent = 'Chrome tabs API not available.';
+        return;
+      }
+      try {
+        const tabs = await chromeObj.tabs.query({});
+        const filteredTabs = tabs.map((t: any) => ({
+          title: t.title,
+          url: t.url,
+          pinned: t.pinned || false
+        }));
+        
+        jsonPayload.value = JSON.stringify(filteredTabs, null, 2);
+        if (statusEl) statusEl.textContent = `Exported ${filteredTabs.length} tabs.`;
+        btnDownload.style.display = 'block';
+      } catch (err: any) {
+        if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+      }
+    });
+
+    btnDownload?.addEventListener('click', () => {
+      const data = jsonPayload.value;
+      if (!data) return;
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'browser_tabs.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    btnImport?.addEventListener('click', async () => {
+      if (!chromeObj?.tabs?.create) {
+        resultsContainer.innerHTML = '<span style="color: #ef4444;">Chrome tabs API not available.</span>';
+        return;
+      }
+      const data = jsonPayload.value;
+      if (!data) return;
+
+      try {
+        const parsed = JSON.parse(data);
+        if (!Array.isArray(parsed)) throw new Error('JSON payload must be an array of tabs.');
+        
+        let count = 0;
+        for (const tab of parsed) {
+          if (tab.url) {
+            await chromeObj.tabs.create({ url: tab.url, pinned: tab.pinned || false });
+            count++;
+          }
+        }
+        resultsContainer.innerHTML = `<span style="color: #22c55e;">Successfully restored ${count} tabs.</span>`;
+      } catch (err: any) {
+        resultsContainer.innerHTML = `<span style="color: #ef4444;">Error: ${err.message}</span>`;
+      }
+    });
   }
 }
 

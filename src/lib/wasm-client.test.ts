@@ -101,7 +101,7 @@ async function makeClient(
 ) {
   const engineInstance = new MockEngine();
   const initFn = vi.fn().mockResolvedValue(undefined);
-  const EngineClass = vi.fn().mockImplementation(() => engineInstance);
+  const EngineClass = vi.fn().mockImplementation(function() { return engineInstance; });
 
   const client = new WasmClient(initFn, EngineClass as any, ['Test'], options);
   await client.waitReady();
